@@ -28,6 +28,10 @@ func init() {
 
 // Run is the runner for an analysis pass
 func run(pass *analysis.Pass) (interface{}, error) {
+	if paths == "" {
+		return nil, nil
+	}
+
 	p := strings.Split(paths, ",")
 
 	suggestions := make(map[string]string, len(p))
