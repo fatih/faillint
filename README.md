@@ -9,6 +9,8 @@ of the `errors` package. To prevent the usage of the `errors` package, you can
 configure `faillint` to fail whenever someone imports the `errors` package in
 this case.
 
+![faillint](https://user-images.githubusercontent.com/438920/74105764-8c644780-4b15-11ea-885e-3ad45b965da4.gif)
+
 
 ## Install
 
@@ -74,7 +76,7 @@ Let's run `faillint` to check if `errors` import is used and report it:
 
 ```
 $ faillint -paths "errors=github.com/pkg/errors" a.go
-a.go:4:2: package "errors" shouldn't be imported. suggested: github.com/pkg/errors
+a.go:4:2: package "errors" shouldn't be imported, suggested: "github.com/pkg/errors"
 ```
 
 ## The need for this tool?
