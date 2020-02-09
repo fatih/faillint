@@ -22,6 +22,18 @@ func Test(t *testing.T) {
 			name:  "b",
 			paths: "",
 		},
+		{
+			name:  "c",
+			paths: "errors=", // malformed suggestion
+		},
+		{
+			name:  "d",
+			paths: "errors=github.com/pkg/errors",
+		},
+		{
+			name:  "e",
+			paths: "errors=github.com/pkg/errors,golang.org/x/net/context=context",
+		},
 	}
 	for _, ts := range tests {
 		ts := ts
