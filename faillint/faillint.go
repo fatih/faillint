@@ -3,6 +3,7 @@
 package faillint
 
 import (
+	"fmt"
 	"go/ast"
 	"strconv"
 	"strings"
@@ -21,22 +22,45 @@ var Analyzer = &analysis.Analyzer{
 var paths string // -paths flag
 
 func init() {
+	// seems like using init() is the only way to add our own flags
 	Analyzer.Flags.StringVar(&paths, "paths", paths, "import paths to fail")
 }
 
 // Run is the runner for an analysis pass
 func run(pass *analysis.Pass) (interface{}, error) {
 	p := strings.Split(paths, ",")
+
+	suggestions := make(map[string]string, len(p))
+	imports := make([]string, 0, len(p))
+
+	for _, s := range p {
+		imps := strings.Split(s, "=")
+
+		imp := imps[0]
+		suggest := ""
+		if len(imps) == 2 {
+			suggest = imps[1]
+		}
+
+		imports = append(imports, imp)
+		suggestions[imp] = suggest
+	}
+
 	for _, file := range pass.Files {
-		for _, path := range p {
+		for _, path := range imports {
 			imp := usesImport(file, path)
 			if imp == nil {
 				continue
 			}
 
 			impPath := importPath(imp)
-			pass.Reportf(imp.Path.Pos(), "package %q shouldn't be imported", impPath)
 
+			msg := fmt.Sprintf("package %q shouldn't be imported", impPath)
+			if s := suggestions[impPath]; s != "" {
+				msg += fmt.Sprintf(", suggested: %q", s)
+			}
+
+			pass.Reportf(imp.Path.Pos(), msg)
 		}
 	}
 

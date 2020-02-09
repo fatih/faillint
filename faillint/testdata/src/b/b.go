@@ -1,4 +1,4 @@
-package a
+package b
 
 import (
 	"errors"

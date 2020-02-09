@@ -5,8 +5,9 @@ are used. It's meant to be used in CI/CD environments to catch rules you want
 to enforce in your projects. 
 
 As an example, you could enforce the usage of `github.com/pkg/errors` instead
-of the `errors` package and hence want to prevent the usage of the `errors`
-package. You can configure `faillint` to fail whenever someone imports the `errors` package in this case.
+of the `errors` package. To prevent the usage of the `errors` package, you can
+configure `faillint` to fail whenever someone imports the `errors` package in
+this case.
 
 
 ## Install
@@ -17,8 +18,7 @@ go get github.com/fatih/faillint
 
 ## Usage
 
-`faillint` prints the output of the analyzer to stdout. You can pass a file,
-directory or a Go package:
+`faillint` works on a a file, directory or a Go package:
 
 ```sh
 $ faillint -paths "errors" foo.go # pass a file
@@ -27,13 +27,13 @@ $ faillint -paths "errors" github.com/fatih/gomodifytags # or pass a package
 ```
 
 By default, `faillint` will not check any import paths. You need to explicitly
-define the `-paths` flag, which is comma=separated list. Some examples are:
+define it with the `-paths` flag, which is comma-separated list. Some examples are:
 
 ```
 # fail if the errors package is used
 -paths "errors"
 
-# fail for the old context package
+# fail if the old context package is imported
 -paths "golang.org/x/net/context"
 
 # fail both on stdlib log and errors package to enforce other internal libraries
@@ -41,7 +41,7 @@ define the `-paths` flag, which is comma=separated list. Some examples are:
 ```
 
 
-If you have a preferred import path to suggest append the suggestion after a `=` charachter:
+If you have a preferred import path to suggest, append the suggestion after a `=` charachter:
 
 ```
 # fail if the errors package is used and suggest to use github.com/pkg/errors
