@@ -9,8 +9,7 @@ of the `errors` package. To prevent the usage of the `errors` package, you can
 configure `faillint` to fail whenever someone imports the `errors` package in
 this case.
 
-![faillint](https://user-images.githubusercontent.com/438920/74105764-8c644780-4b15-11ea-885e-3ad45b965da4.gif)
-
+![faillint](https://user-images.githubusercontent.com/438920/74105802-f7158300-4b15-11ea-8e23-16be5cd3b971.gif)
 
 ## Install
 
@@ -20,7 +19,7 @@ go get github.com/fatih/faillint
 
 ## Usage
 
-`faillint` works on a a file, directory or a Go package:
+`faillint` works on a file, directory or a Go package:
 
 ```sh
 $ faillint -paths "errors" foo.go # pass a file
@@ -43,7 +42,7 @@ define it with the `-paths` flag, which is comma-separated list. Some examples a
 ```
 
 
-If you have a preferred import path to suggest, append the suggestion after a `=` charachter:
+If you have a preferred import path to suggest, append the suggestion after a `=` character:
 
 ```
 # fail if the errors package is used and suggest to use github.com/pkg/errors
@@ -82,7 +81,7 @@ a.go:4:2: package "errors" shouldn't be imported, suggested: "github.com/pkg/err
 ## The need for this tool?
 
 Most of these checks should be probably detected during the review cycle. But
-it's totally normal to accidently import them (we're all humans in the end). 
+it's totally normal to accidentally import them (we're all humans in the end). 
 
 Second, tools like `goimports` favors certain packages. As an example going
 forward if you decided to use `github.com/pkg/errors` in you project, and write
