@@ -43,3 +43,14 @@ func Test(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkTest(b *testing.B) {
+	testdata := analysistest.TestData()
+	paths := "errors=github.com/pkg/errors,golang.org/x/net/context=context"
+	faillint.Analyzer.Flags.Set("paths", paths)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		analysistest.Run(b, testdata, faillint.Analyzer, "e")
+	}
+}

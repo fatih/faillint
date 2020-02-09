@@ -32,7 +32,6 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	suggestions := make(map[string]string, len(p))
 	imports := make([]string, 0, len(p))
-
 	for _, s := range p {
 		imps := strings.Split(s, "=")
 
@@ -47,12 +46,12 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	for _, file := range pass.Files {
-		for _, path := range imports {
-			imp := usesImport(file, path)
-			if imp == nil {
-				continue
-			}
+		imps := usesImports(file, imports)
+		if len(imps) == 0 {
+			continue
+		}
 
+		for _, imp := range imps {
 			impPath := importPath(imp)
 
 			msg := fmt.Sprintf("package %q shouldn't be imported", impPath)
@@ -67,54 +66,75 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil
 }
 
-// usesImport reports whether a given import is used.
-func usesImport(f *ast.File, path string) *ast.ImportSpec {
-	spec := importSpec(f, path)
-	if spec == nil {
+// usesImports reports whether a given import is used.
+func usesImports(f *ast.File, paths []string) []*ast.ImportSpec {
+	specs := importSpecs(f, paths)
+	if len(specs) == 0 {
 		return nil
 	}
 
-	name := spec.Name.String()
-	switch name {
-	case "<nil>":
-		// If the package name is not explicitly specified,
-		// make an educated guess. This is not guaranteed to be correct.
-		lastSlash := strings.LastIndex(path, "/")
-		if lastSlash == -1 {
-			name = path
-		} else {
-			name = path[lastSlash+1:]
+	var result []*ast.ImportSpec
+	names := make(map[string]*ast.ImportSpec, 0)
+
+	for path, spec := range specs {
+		name := spec.Name.String()
+		switch name {
+		case "<nil>":
+			// If the package name is not explicitly specified,
+			// make an educated guess. This is not guaranteed to be correct.
+			lastSlash := strings.LastIndex(path, "/")
+			if lastSlash == -1 {
+				name = path
+			} else {
+				name = path[lastSlash+1:]
+			}
+		case "_", ".":
+			// Not sure if this import is used - err on the side of caution.
+			result = append(result, spec)
+			continue
 		}
-	case "_", ".":
-		// Not sure if this import is used - err on the side of caution.
-		return spec
+
+		// we're going to check them individually
+		names[name] = spec
 	}
 
-	var used bool
 	ast.Inspect(f, func(n ast.Node) bool {
 		sel, ok := n.(*ast.SelectorExpr)
-		if ok && isTopName(sel.X, name) {
-			used = true
+		if !ok {
+			return true
 		}
+
+		for name, spec := range names {
+			if isTopName(sel.X, name) {
+				result = append(result, spec)
+			}
+		}
+
 		return true
 	})
 
-	if used {
-		return spec
-	}
-
-	return nil
+	return result
 }
 
-// importSpec returns the import spec if f imports path,
+// importSpecs returns the import specs if f imports the given paths,
 // or nil otherwise.
-func importSpec(f *ast.File, path string) *ast.ImportSpec {
+func importSpecs(f *ast.File, paths []string) map[string]*ast.ImportSpec {
+	hasImport := make(map[string]*ast.ImportSpec, 0)
 	for _, s := range f.Imports {
-		if importPath(s) == path {
-			return s
-		}
+		hasImport[importPath(s)] = s
 	}
-	return nil
+
+	specs := make(map[string]*ast.ImportSpec, 0)
+	for _, path := range paths {
+		spec, ok := hasImport[path]
+		if !ok {
+			continue
+		}
+
+		specs[path] = spec
+	}
+
+	return specs
 }
 
 // importPath returns the unquoted import path of s,
