@@ -34,6 +34,10 @@ func Test(t *testing.T) {
 			name:  "e",
 			paths: "errors=github.com/pkg/errors,golang.org/x/net/context=context",
 		},
+		{
+			name:  "f",
+			paths: "golang.org/x/net",
+		},
 	}
 	for _, ts := range tests {
 		ts := ts

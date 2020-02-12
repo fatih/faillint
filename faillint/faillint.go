@@ -52,15 +52,18 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	for _, file := range pass.Files {
 		for _, path := range imports {
-			imp := usesImport(file, path)
+			imp, exact := usesImport(file, path)
 			if imp == nil {
 				continue
 			}
 
-			impPath := importPath(imp)
-
-			msg := fmt.Sprintf("package %q shouldn't be imported", impPath)
-			if s := suggestions[impPath]; s != "" {
+			var msg string
+			if exact {
+				msg = fmt.Sprintf("package %q shouldn't be imported", path)
+			} else {
+				msg = fmt.Sprintf("sub-package of %q shouldn't be imported", path)
+			}
+			if s := suggestions[path]; s != "" {
 				msg += fmt.Sprintf(", suggested: %q", s)
 			}
 
@@ -71,27 +74,31 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil
 }
 
-// usesImport reports whether a given import is used.
-func usesImport(f *ast.File, path string) *ast.ImportSpec {
-	spec := importSpec(f, path)
+// usesImport reports whether a given import package(exact) or its subpackage is used.
+func usesImport(f *ast.File, path string) (*ast.ImportSpec, bool) {
+	spec, exact := importSpec(f, path)
 	if spec == nil {
-		return nil
+		return nil, false
 	}
 
 	name := spec.Name.String()
 	switch name {
 	case "<nil>":
 		// If the package name is not explicitly specified,
-		// make an educated guess. This is not guaranteed to be correct.
-		lastSlash := strings.LastIndex(path, "/")
+		// get the last component from import path.
+		impPath, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			return nil, false
+		}
+		lastSlash := strings.LastIndex(impPath, "/")
 		if lastSlash == -1 {
-			name = path
+			name = impPath
 		} else {
-			name = path[lastSlash+1:]
+			name = impPath[lastSlash+1:]
 		}
 	case "_", ".":
 		// Not sure if this import is used - err on the side of caution.
-		return spec
+		return spec, exact
 	}
 
 	var used bool
@@ -104,21 +111,24 @@ func usesImport(f *ast.File, path string) *ast.ImportSpec {
 	})
 
 	if used {
-		return spec
+		return spec, exact
 	}
 
-	return nil
+	return nil, false
 }
 
-// importSpec returns the import spec if f imports path,
+// importSpec returns the import spec if f imports path (exact) or its subpackage,
 // or nil otherwise.
-func importSpec(f *ast.File, path string) *ast.ImportSpec {
+func importSpec(f *ast.File, path string) (node *ast.ImportSpec, exact bool) {
 	for _, s := range f.Imports {
-		if importPath(s) == path {
-			return s
+		impPath := importPath(s)
+		if impPath != "" {
+			if strings.HasPrefix(impPath, path) {
+				return s, impPath == path
+			}
 		}
 	}
-	return nil
+	return nil, false
 }
 
 // importPath returns the unquoted import path of s,
