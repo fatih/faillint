@@ -57,6 +57,18 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				continue
 			}
 
+			if !exact {
+				importPath, err := strconv.Unquote(imp.Path.Value)
+				if err != nil {
+					continue
+				}
+				// If user has explicitly specified this path, skip this non-exact match,
+				// and leave to be handled in the exact path.
+				if _, ok := suggestions[importPath]; ok {
+					continue
+				}
+			}
+
 			var msg string
 			if exact {
 				msg = fmt.Sprintf("package %q shouldn't be imported", path)

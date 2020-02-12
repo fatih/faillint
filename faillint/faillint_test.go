@@ -38,6 +38,10 @@ func Test(t *testing.T) {
 			name:  "f",
 			paths: "golang.org/x/net",
 		},
+		{
+			name:  "g",
+			paths: "golang.org/x/net=net,golang.org/x/net/context=context",
+		},
 	}
 	for _, ts := range tests {
 		ts := ts
