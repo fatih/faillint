@@ -19,11 +19,13 @@ var Analyzer = &analysis.Analyzer{
 	RunDespiteErrors: true,
 }
 
-var paths string // -paths flag
+var paths string     // -paths flag
+var ignoretests bool // -ignore-tests flag
 
 func init() {
 	// seems like using init() is the only way to add our own flags
 	Analyzer.Flags.StringVar(&paths, "paths", paths, "import paths to fail")
+	Analyzer.Flags.BoolVar(&ignoretests, "ignore-tests", ignoretests, "ignore all _test.go files and packages.")
 }
 
 // Run is the runner for an analysis pass
@@ -51,6 +53,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	for _, file := range pass.Files {
+		if ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
+			continue
+		}
 		for _, path := range imports {
 			imp := usesImport(file, path)
 			if imp == nil {
