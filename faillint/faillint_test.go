@@ -38,8 +38,9 @@ func Test(t *testing.T) {
 	for _, ts := range tests {
 		ts := ts
 		t.Run(ts.name, func(t *testing.T) {
-			faillint.Analyzer.Flags.Set("paths", ts.paths)
-			analysistest.Run(t, testdata, faillint.Analyzer, ts.name)
+			a := faillint.NewAnalyzer()
+			a.Flags.Set("paths", ts.paths)
+			analysistest.Run(t, testdata, a, ts.name)
 		})
 	}
 }
