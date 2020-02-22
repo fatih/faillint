@@ -11,28 +11,49 @@ func Test(t *testing.T) {
 	testdata := analysistest.TestData()
 
 	var tests = []struct {
-		name  string
-		paths string
+		name        string
+		paths       string
+		ignoretests bool
 	}{
 		{
-			name:  "a",
-			paths: "errors",
+			name:        "a",
+			paths:       "errors",
+			ignoretests: false,
 		},
 		{
-			name:  "b",
-			paths: "",
+			name:        "b",
+			paths:       "",
+			ignoretests: false,
 		},
 		{
-			name:  "c",
-			paths: "errors=", // malformed suggestion
+			name:        "c",
+			paths:       "errors=", // malformed suggestion
+			ignoretests: false,
 		},
 		{
-			name:  "d",
-			paths: "errors=github.com/pkg/errors",
+			name:        "d",
+			paths:       "errors=github.com/pkg/errors",
+			ignoretests: false,
 		},
 		{
-			name:  "e",
-			paths: "errors=github.com/pkg/errors,golang.org/x/net/context=context",
+			name:        "e",
+			paths:       "errors=github.com/pkg/errors,golang.org/x/net/context=context",
+			ignoretests: false,
+		},
+		{
+			name:        "f",
+			paths:       "errors",
+			ignoretests: true,
+		},
+		{
+			name:        "g",
+			paths:       "errors",
+			ignoretests: true,
+		},
+		{
+			name:        "h",
+			paths:       "errors",
+			ignoretests: false,
 		},
 	}
 	for _, ts := range tests {
@@ -40,6 +61,9 @@ func Test(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			a := faillint.NewAnalyzer()
 			a.Flags.Set("paths", ts.paths)
+			if ts.ignoretests {
+				a.Flags.Set("ignore-tests", "true")
+			}
 			analysistest.Run(t, testdata, a, ts.name)
 		})
 	}
