@@ -5,10 +5,17 @@ package faillint
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"golang.org/x/tools/go/analysis"
+)
+
+var (
+	pathRegexp = regexp.MustCompile(`(?P<import>[\w/.-]+[\w])(\.?{(?P<functions>[\w-,]+)}|)(=(?P<suggestion>[\w/.-]+[\w](\.?{[\w-,]+}|))|)`)
 )
 
 type faillint struct {
@@ -16,123 +23,158 @@ type faillint struct {
 	ignoretests bool   // -ignore-tests flag
 }
 
-// Analyzer global instance of the linter (if possible use NewAnalyzer)
-var Analyzer = NewAnalyzer()
-
-// NewAnalyzer create a faillint analyzer
-func NewAnalyzer() *analysis.Analyzer {
+// New create a faillint analyzer.
+func New() *analysis.Analyzer {
 	f := faillint{
 		paths:       "",
 		ignoretests: false,
 	}
 	a := &analysis.Analyzer{
 		Name:             "faillint",
-		Doc:              "report unwanted import path usages",
+		Doc:              "Report unwanted import path, and function usages",
 		Run:              f.run,
 		RunDespiteErrors: true,
 	}
 
-	a.Flags.StringVar(&f.paths, "paths", "", "import paths to fail")
+	a.Flags.StringVar(&f.paths, "paths", "", `import paths, functions or methods to fail.
+E.g: foo,github.com/foo/bar,github.com/foo/bar/foo.{A}=github.com/foo/bar/bar.{C},github.com/foo/bar/foo.{D,C}`)
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
 	return a
 }
 
-// Run is the runner for an analysis pass
+func trimAllWhitespaces(str string) string {
+	var b strings.Builder
+	b.Grow(len(str))
+	for _, ch := range str {
+		if !unicode.IsSpace(ch) {
+			b.WriteRune(ch)
+		}
+	}
+	return b.String()
+}
+
+type path struct {
+	imp  string
+	fn   []string
+	sugg string
+}
+
+func parsePaths(paths string) []path {
+	pathGroups := pathRegexp.FindAllStringSubmatch(trimAllWhitespaces(paths), -1)
+
+	parsed := make([]path, 0, len(pathGroups))
+	for _, group := range pathGroups {
+		p := path{}
+		for i, name := range pathRegexp.SubexpNames() {
+			switch name {
+			case "import":
+				p.imp = group[i]
+			case "suggestion":
+				p.sugg = group[i]
+			case "functions":
+				if group[i] == "" {
+					break
+				}
+				p.fn = strings.Split(group[i], ",")
+			}
+		}
+		parsed = append(parsed, p)
+	}
+	return parsed
+}
+
+// run is the runner for an analysis pass.
 func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 	if f.paths == "" {
 		return nil, nil
 	}
-
-	p := strings.Split(f.paths, ",")
-
-	suggestions := make(map[string]string, len(p))
-	imports := make([]string, 0, len(p))
-
-	for _, s := range p {
-		imps := strings.Split(s, "=")
-
-		imp := imps[0]
-		suggest := ""
-		if len(imps) == 2 {
-			suggest = imps[1]
-		}
-
-		imports = append(imports, imp)
-		suggestions[imp] = suggest
-	}
-
 	for _, file := range pass.Files {
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
-		for _, path := range imports {
-			imp := usesImport(file, path)
-			if imp == nil {
+		for _, path := range parsePaths(f.paths) {
+			specs := importSpec(file, path.imp)
+			if len(specs) == 0 {
 				continue
 			}
+			for _, spec := range specs {
+				usages := importUsages(file, spec)
+				if len(usages) == 0 {
+					continue
+				}
 
-			impPath := importPath(imp)
+				if _, ok := usages[unspecifiedUsage]; ok || len(path.fn) == 0 {
+					// File using unwanted import. Report.
+					msg := fmt.Sprintf("package %q shouldn't be imported", importPath(spec))
+					if path.sugg != "" {
+						msg += fmt.Sprintf(", suggested: %q", path.sugg)
+					}
+					pass.Reportf(spec.Path.Pos(), msg)
+					continue
+				}
 
-			msg := fmt.Sprintf("package %q shouldn't be imported", impPath)
-			if s := suggestions[impPath]; s != "" {
-				msg += fmt.Sprintf(", suggested: %q", s)
+				// Not all usages are forbidden. Report only unwanted functions.
+				for _, fn := range path.fn {
+					positions, ok := usages[fn]
+					if !ok {
+						continue
+					}
+					msg := fmt.Sprintf("function %q from package %q shouldn't be used", fn, importPath(spec))
+					if path.sugg != "" {
+						msg += fmt.Sprintf(", suggested: %q", path.sugg)
+					}
+					for _, pos := range positions {
+						pass.Reportf(pos, msg)
+					}
+				}
 			}
-
-			pass.Reportf(imp.Path.Pos(), msg)
 		}
 	}
 
 	return nil, nil
 }
 
-// usesImport reports whether a given import is used.
-func usesImport(f *ast.File, path string) *ast.ImportSpec {
-	spec := importSpec(f, path)
-	if spec == nil {
-		return nil
-	}
+const unspecifiedUsage = "unspecified"
 
-	name := spec.Name.String()
-	switch name {
+// importUsages reports all usages of a given import.
+func importUsages(f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
+	importRef := spec.Name.String()
+	switch importRef {
 	case "<nil>":
-		// If the package name is not explicitly specified,
+		importRef, _ = strconv.Unquote(spec.Path.Value)
+		// If the package importRef is not explicitly specified,
 		// make an educated guess. This is not guaranteed to be correct.
-		lastSlash := strings.LastIndex(path, "/")
-		if lastSlash == -1 {
-			name = path
-		} else {
-			name = path[lastSlash+1:]
+		lastSlash := strings.LastIndex(importRef, "/")
+		if lastSlash != -1 {
+			importRef = importRef[lastSlash+1:]
 		}
 	case "_", ".":
-		// Not sure if this import is used - err on the side of caution.
-		return spec
+		// Not sure if this import is used - on the side of caution, report special "unspecified" usage.
+		return map[string][]token.Pos{unspecifiedUsage: nil}
 	}
+	usages := map[string][]token.Pos{}
 
-	var used bool
 	ast.Inspect(f, func(n ast.Node) bool {
 		sel, ok := n.(*ast.SelectorExpr)
-		if ok && isTopName(sel.X, name) {
-			used = true
+		if !ok {
+			return true
+		}
+		if isTopName(sel.X, importRef) {
+			usages[sel.Sel.Name] = append(usages[sel.Sel.Name], sel.Sel.NamePos)
 		}
 		return true
 	})
-
-	if used {
-		return spec
-	}
-
-	return nil
+	return usages
 }
 
-// importSpec returns the import spec if f imports path,
-// or nil otherwise.
-func importSpec(f *ast.File, path string) *ast.ImportSpec {
+// importSpecs returns all import specs for f import statements importing path.
+func importSpec(f *ast.File, path string) (imports []*ast.ImportSpec) {
 	for _, s := range f.Imports {
 		if importPath(s) == path {
-			return s
+			imports = append(imports, s)
 		}
 	}
-	return nil
+	return imports
 }
 
 // importPath returns the unquoted import path of s,
