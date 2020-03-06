@@ -33,7 +33,7 @@ func NewAnalyzer() *analysis.Analyzer {
 	}
 
 	a.Flags.StringVar(&f.paths, "paths", "", "import paths to fail")
-	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files and packages.")
+	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
 	return a
 }
 
