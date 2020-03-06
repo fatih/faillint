@@ -11,28 +11,39 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// Analyzer of the linter
-var Analyzer = &analysis.Analyzer{
-	Name:             "faillint",
-	Doc:              "report unwanted import path usages",
-	Run:              run,
-	RunDespiteErrors: true,
+type faillint struct {
+	paths       string // -paths flag
+	ignoretests bool   // -ignore-tests flag
 }
 
-var paths string // -paths flag
+// Analyzer global instance of the linter (if possible use NewAnalyzer)
+var Analyzer = NewAnalyzer()
 
-func init() {
-	// seems like using init() is the only way to add our own flags
-	Analyzer.Flags.StringVar(&paths, "paths", paths, "import paths to fail")
+// NewAnalyzer create a faillint analyzer
+func NewAnalyzer() *analysis.Analyzer {
+	f := faillint{
+		paths:       "",
+		ignoretests: false,
+	}
+	a := &analysis.Analyzer{
+		Name:             "faillint",
+		Doc:              "report unwanted import path usages",
+		Run:              f.run,
+		RunDespiteErrors: true,
+	}
+
+	a.Flags.StringVar(&f.paths, "paths", "", "import paths to fail")
+	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files and packages.")
+	return a
 }
 
 // Run is the runner for an analysis pass
-func run(pass *analysis.Pass) (interface{}, error) {
-	if paths == "" {
+func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
+	if f.paths == "" {
 		return nil, nil
 	}
 
-	p := strings.Split(paths, ",")
+	p := strings.Split(f.paths, ",")
 
 	suggestions := make(map[string]string, len(p))
 	imports := make([]string, 0, len(p))
@@ -51,6 +62,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	for _, file := range pass.Files {
+		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
+			continue
+		}
 		for _, path := range imports {
 			imp := usesImport(file, path)
 			if imp == nil {
