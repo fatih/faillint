@@ -23,9 +23,9 @@ go get github.com/fatih/faillint
 `faillint` works on a file, directory or a Go package:
 
 ```sh
-$ faillint -paths "errors,fmt.{Errof}" foo.go # pass a file
-$ faillint -paths "errors,fmt.{Errof}" ./...  # recursively analyze all files
-$ faillint -paths "errors,fmt.{Errof}" github.com/fatih/gomodifytags # or pass a package
+$ faillint -paths "errors,fmt.{Errorf}" foo.go # pass a file
+$ faillint -paths "errors,fmt.{Errorf}" ./...  # recursively analyze all files
+$ faillint -paths "errors,fmt.{Errorf}" github.com/fatih/gomodifytags # or pass a package
 ```
 
 By default, `faillint` will not check any import paths. You need to explicitly

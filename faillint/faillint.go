@@ -30,10 +30,10 @@ type faillint struct {
 
 // Analyzer is a global instance of the linter.
 // DEPRECATED: Use faillint.New instead.
-var Analyzer = New()
+var Analyzer = NewAnalyzer()
 
-// New create a faillint analyzer.
-func New() *analysis.Analyzer {
+// NewAnalyzer create a faillint analyzer.
+func NewAnalyzer() *analysis.Analyzer {
 	f := faillint{
 		paths:       "",
 		ignoretests: false,

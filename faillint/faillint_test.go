@@ -211,7 +211,7 @@ func TestRun(t *testing.T) {
 		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
-			f := New()
+			f := NewAnalyzer()
 			f.Flags.Set("paths", tcase.paths)
 			if tcase.ignoreTestFiles {
 				f.Flags.Set("ignore-tests", "true")
