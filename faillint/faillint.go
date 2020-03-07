@@ -14,14 +14,23 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-var (
-	pathRegexp = regexp.MustCompile(`(?P<import>[\w/.-]+[\w])(\.?{(?P<functions>[\w-,]+)}|)(=(?P<suggestion>[\w/.-]+[\w](\.?{[\w-,]+}|))|)`)
-)
+// pathsRegexp represents a regexp that is used to parse -paths flag.
+// It parses flag content in set of 3 subgroups:
+//
+// * import: Mandatory part. Go import path in URL format to be unwanted or have unwanted declarations.
+// * declarations: Optional declarations in `{ }`. If set, using the import is allowed expect give declarations.
+// * suggestion: Optional suggestion to print when unwanted import or declaration is found.
+//
+var pathsRegexp = regexp.MustCompile(`(?P<import>[\w/.-]+[\w])(\.?{(?P<declarations>[\w-,]+)}|)(=(?P<suggestion>[\w/.-]+[\w](\.?{[\w-,]+}|))|)`)
 
 type faillint struct {
 	paths       string // -paths flag
 	ignoretests bool   // -ignore-tests flag
 }
+
+// Analyzer is a global instance of the linter.
+// DEPRECATED: Use faillint.New instead.
+var Analyzer = New()
 
 // New create a faillint analyzer.
 func New() *analysis.Analyzer {
@@ -31,13 +40,13 @@ func New() *analysis.Analyzer {
 	}
 	a := &analysis.Analyzer{
 		Name:             "faillint",
-		Doc:              "Report unwanted import path, and function usages",
+		Doc:              "Report unwanted import path or exported declaration usages",
 		Run:              f.run,
 		RunDespiteErrors: true,
 	}
 
-	a.Flags.StringVar(&f.paths, "paths", "", `import paths, functions or methods to fail.
-E.g: foo,github.com/foo/bar,github.com/foo/bar/foo.{A}=github.com/foo/bar/bar.{C},github.com/foo/bar/foo.{D,C}`)
+	a.Flags.StringVar(&f.paths, "paths", "", `import paths or exported declarations (i.e: functions, constant, types or variables) to fail.
+E.g. errors=github.com/pkg/errors,fmt.{Errorf}=github.com/pkg/errors.{Errorf},fmt.{Println,Print,Printf},github.com/prometheus/client_golang/prometheus.{DefaultGatherer,MustRegister}`)
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
 	return a
 }
@@ -54,28 +63,28 @@ func trimAllWhitespaces(str string) string {
 }
 
 type path struct {
-	imp  string
-	fn   []string
-	sugg string
+	imp   string
+	decls []string
+	sugg  string
 }
 
 func parsePaths(paths string) []path {
-	pathGroups := pathRegexp.FindAllStringSubmatch(trimAllWhitespaces(paths), -1)
+	pathGroups := pathsRegexp.FindAllStringSubmatch(trimAllWhitespaces(paths), -1)
 
 	parsed := make([]path, 0, len(pathGroups))
 	for _, group := range pathGroups {
 		p := path{}
-		for i, name := range pathRegexp.SubexpNames() {
+		for i, name := range pathsRegexp.SubexpNames() {
 			switch name {
 			case "import":
 				p.imp = group[i]
 			case "suggestion":
 				p.sugg = group[i]
-			case "functions":
+			case "declarations":
 				if group[i] == "" {
 					break
 				}
-				p.fn = strings.Split(group[i], ",")
+				p.decls = strings.Split(group[i], ",")
 			}
 		}
 		parsed = append(parsed, p)
@@ -103,7 +112,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 					continue
 				}
 
-				if _, ok := usages[unspecifiedUsage]; ok || len(path.fn) == 0 {
+				if _, ok := usages[unspecifiedUsage]; ok || len(path.decls) == 0 {
 					// File using unwanted import. Report.
 					msg := fmt.Sprintf("package %q shouldn't be imported", importPath(spec))
 					if path.sugg != "" {
@@ -113,13 +122,13 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 					continue
 				}
 
-				// Not all usages are forbidden. Report only unwanted functions.
-				for _, fn := range path.fn {
-					positions, ok := usages[fn]
+				// Not all usages are forbidden. Report only unwanted declarations.
+				for _, declaration := range path.decls {
+					positions, ok := usages[declaration]
 					if !ok {
 						continue
 					}
-					msg := fmt.Sprintf("function %q from package %q shouldn't be used", fn, importPath(spec))
+					msg := fmt.Sprintf("declaration %q from package %q shouldn't be used", declaration, importPath(spec))
 					if path.sugg != "" {
 						msg += fmt.Sprintf(", suggested: %q", path.sugg)
 					}
@@ -136,7 +145,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 
 const unspecifiedUsage = "unspecified"
 
-// importUsages reports all usages of a given import.
+// importUsages reports all exported declaration used for a given import.
 func importUsages(f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 	importRef := spec.Name.String()
 	switch importRef {

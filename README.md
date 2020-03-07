@@ -1,13 +1,14 @@
 # faillint [![](https://github.com/fatih/faillint/workflows/build/badge.svg)](https://github.com/fatih/faillint/actions)
 
 Faillint is a simple Go linter that fails when a specific set of import paths
-are used. It's meant to be used in CI/CD environments to catch rules you want
-to enforce in your projects. 
+or exported path's functions, constant, vars or types are used. It's meant to be
+used in CI/CD environments to catch rules you want to enforce in your projects. 
 
 As an example, you could enforce the usage of `github.com/pkg/errors` instead
 of the `errors` package. To prevent the usage of the `errors` package, you can
 configure `faillint` to fail whenever someone imports the `errors` package in
-this case.
+this case. To make sure `fmt.Errorf` is not used for creating errors as well, 
+you can configure to fail on such single function of `fmt` as well. 
 
 ![faillint](https://user-images.githubusercontent.com/438920/74105802-f7158300-4b15-11ea-8e23-16be5cd3b971.gif)
 
@@ -22,37 +23,42 @@ go get github.com/fatih/faillint
 `faillint` works on a file, directory or a Go package:
 
 ```sh
-$ faillint -paths "errors" foo.go # pass a file
-$ faillint -paths "errors" ./...  # recursively analyze all files
-$ faillint -paths "errors" github.com/fatih/gomodifytags # or pass a package
+$ faillint -paths "errors,fmt.{Errof}" foo.go # pass a file
+$ faillint -paths "errors,fmt.{Errof}" ./...  # recursively analyze all files
+$ faillint -paths "errors,fmt.{Errof}" github.com/fatih/gomodifytags # or pass a package
 ```
 
 By default, `faillint` will not check any import paths. You need to explicitly
 define it with the `-paths` flag, which is comma-separated list. Some examples are:
 
 ```
-# fail if the errors package is used
+# Fail if the errors package is used.
 -paths "errors"
 
-# fail if the old context package is imported
+# Fail if the old context package is imported.
 -paths "golang.org/x/net/context"
 
-# fail both on stdlib log and errors package to enforce other internal libraries
+# Fail both on stdlib log and errors package to enforce other internal libraries.
 -paths "log,errors"
-```
 
+# Fail if any of Print, Printf of Println function were used from fmt library.
+-paths "fmt.{Print,Printf,Println}"
+```
 
 If you have a preferred import path to suggest, append the suggestion after a `=` character:
 
 ```
-# fail if the errors package is used and suggest to use github.com/pkg/errors
+# Fail if the errors package is used and suggest to use github.com/pkg/errors.
 -paths "errors=github.com/pkg/errors"
 
-# fail for the old context import path and suggest to use the stdlib context
+# Fail for the old context import path and suggest to use the stdlib context.
 -paths "golang.org/x/net/context=context"
 
-# fail both on stdlib log and errors package to enforce other libraries
+# Fail both on stdlib log and errors package to enforce other libraries.
 -paths "log=go.uber.org/zap,errors=github.com/pkg/errors"
+
+# Fail on fmt.Errorf and suggest the Errorf function from github.compkg/errors instead.
+-paths "fmt.{Errorf}=github.com/pkg/errors.{Errorf}"
 ```
 
 ## Example

@@ -57,40 +57,40 @@ func TestParsePaths(t *testing.T) {
 		{
 			paths: "fmt.{Errorf}=github.com/pkg/errors",
 			expected: []path{
-				{imp: "fmt", fn: []string{"Errorf"}, sugg: "github.com/pkg/errors"},
+				{imp: "fmt", decls: []string{"Errorf"}, sugg: "github.com/pkg/errors"},
 			},
 		},
 		{
 			paths: "fmt.{Errorf}=github.com/pkg/errors.{Errorf}",
 			expected: []path{
-				{imp: "fmt", fn: []string{"Errorf"}, sugg: "github.com/pkg/errors.{Errorf}"},
+				{imp: "fmt", decls: []string{"Errorf"}, sugg: "github.com/pkg/errors.{Errorf}"},
 			},
 		},
 		{
 			paths: "fmt.{Errorf,AnotherFunction}=github.com/pkg/errors.{Errorf,AnotherFunction}",
 			expected: []path{
-				{imp: "fmt", fn: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
+				{imp: "fmt", decls: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
 			},
 		},
 		{
 			// Whitespace madness.
 			paths: "fmt.{Errorf, AnotherFunction}    =   github.com/pkg/errors.{ Errorf,  AnotherFunction}",
 			expected: []path{
-				{imp: "fmt", fn: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
+				{imp: "fmt", decls: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
 			},
 		},
 		{
 			// Without dot it works too.
 			paths: "fmt{Errorf,AnotherFunction}=github.com/pkg/errors.{Errorf,AnotherFunction}",
 			expected: []path{
-				{imp: "fmt", fn: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
+				{imp: "fmt", decls: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
 			},
 		},
 		{
 			// Suggestion without { }.
 			paths: "fmt.{Errorf}=github.com/pkg/errors.Errorf",
 			expected: []path{
-				{imp: "fmt", fn: []string{"Errorf"}, sugg: "github.com/pkg/errors.Errorf"},
+				{imp: "fmt", decls: []string{"Errorf"}, sugg: "github.com/pkg/errors.Errorf"},
 			},
 		},
 		{
@@ -105,8 +105,8 @@ func TestParsePaths(t *testing.T) {
 			expected: []path{
 				{imp: "foo"},
 				{imp: "github.com/foo/bar"},
-				{imp: "github.com/foo/bar/foo", fn: []string{"A"}, sugg: "github.com/foo/bar/bar.{C}"},
-				{imp: "github.com/foo/bar/foo", fn: []string{"D", "C"}},
+				{imp: "github.com/foo/bar/foo", decls: []string{"A"}, sugg: "github.com/foo/bar/bar.{C}"},
+				{imp: "github.com/foo/bar/foo", decls: []string{"D", "C"}},
 			},
 		},
 	} {
@@ -203,6 +203,11 @@ func TestRun(t *testing.T) {
 			dir:             "h_ignore",
 			paths:           "errors=github.com/pkg/errors",
 			ignoreTestFiles: true,
+		},
+		{
+			name:  "unwanted constant, variables and types",
+			dir:   "i",
+			paths: "os.{O_RDONLY,ErrNotExist,File}",
 		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
