@@ -55,6 +55,16 @@ func Test(t *testing.T) {
 			paths:       "errors",
 			ignoretests: false,
 		},
+		{
+			name:        "i",
+			paths:       "errors",
+			ignoretests: false,
+		},
+		{
+			name:        "j",
+			paths:       "errors",
+			ignoretests: false,
+		},
 	}
 	for _, ts := range tests {
 		ts := ts

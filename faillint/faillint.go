@@ -62,12 +62,18 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	for _, file := range pass.Files {
+		if fileIsIgnored(file) {
+			continue
+		}
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
 		for _, path := range imports {
 			imp := usesImport(file, path)
 			if imp == nil {
+				continue
+			}
+			if importIsIgnored(imp) {
 				continue
 			}
 
@@ -149,4 +155,39 @@ func importPath(s *ast.ImportSpec) string {
 func isTopName(n ast.Expr, name string) bool {
 	id, ok := n.(*ast.Ident)
 	return ok && id.Name == name && id.Obj == nil
+}
+
+func parseDirective(s string) (cmd string, args []string) {
+	if !strings.HasPrefix(s, "//lint:") {
+		return "", nil
+	}
+	s = strings.TrimPrefix(s, "//lint:")
+	fields := strings.Split(s, " ")
+	return fields[0], fields[1:]
+}
+
+func fileIsIgnored(f *ast.File) bool {
+	if f.Doc == nil {
+		return false
+	}
+	for _, comment := range f.Doc.List {
+		cmd, args := parseDirective(comment.Text)
+		if cmd == "file-ignore" && len(args) > 0 && args[0] == "faillint" {
+			return true
+		}
+	}
+	return false
+}
+
+func importIsIgnored(s *ast.ImportSpec) bool {
+	if s.Doc == nil {
+		return false
+	}
+	for _, comment := range s.Doc.List {
+		cmd, args := parseDirective(comment.Text)
+		if cmd == "ignore" && len(args) > 0 && args[0] == "faillint" {
+			return true
+		}
+	}
+	return false
 }
