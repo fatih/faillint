@@ -13,3 +13,5 @@
 
 faillint/testdata/pkg
 
+# IDE workspace files
+/.vscode/

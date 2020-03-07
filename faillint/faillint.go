@@ -101,13 +101,20 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
+		if hasDirective(file.Doc, fileignore) {
+			continue
+		}
+		commentMap := ast.NewCommentMap(pass.Fset, file, file.Comments)
 		for _, path := range parsePaths(f.paths) {
 			specs := importSpec(file, path.imp)
 			if len(specs) == 0 {
 				continue
 			}
 			for _, spec := range specs {
-				usages := importUsages(file, spec)
+				if usageHasDirective(commentMap, spec, spec.Pos(), ignore) {
+					continue
+				}
+				usages := importUsages(commentMap, file, spec)
 				if len(usages) == 0 {
 					continue
 				}
@@ -146,7 +153,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 const unspecifiedUsage = "unspecified"
 
 // importUsages reports all exported declaration used for a given import.
-func importUsages(f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
+func importUsages(commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 	importRef := spec.Name.String()
 	switch importRef {
 	case "<nil>":
@@ -169,6 +176,9 @@ func importUsages(f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 			return true
 		}
 		if isTopName(sel.X, importRef) {
+			if usageHasDirective(commentMap, n, sel.Sel.NamePos, ignore) {
+				return true
+			}
 			usages[sel.Sel.Name] = append(usages[sel.Sel.Name], sel.Sel.NamePos)
 		}
 		return true
@@ -200,4 +210,51 @@ func importPath(s *ast.ImportSpec) string {
 func isTopName(n ast.Expr, name string) bool {
 	id, ok := n.(*ast.Ident)
 	return ok && id.Name == name && id.Obj == nil
+}
+
+func parseDirective(s string) (option string) {
+	if !strings.HasPrefix(s, "//faillint:") {
+		return ""
+	}
+	s = strings.TrimPrefix(s, "//faillint:")
+	fields := strings.Split(s, " ")
+	return fields[0]
+}
+
+const (
+	ignore     = "ignore"
+	fileignore = "file-ignore"
+)
+
+func hasDirective(cg *ast.CommentGroup, option string) bool {
+	if cg == nil {
+		return false
+	}
+	for _, c := range cg.List {
+		o := parseDirective(c.Text)
+		if o == option {
+			return true
+		}
+	}
+	return false
+}
+
+func usageHasDirective(cm ast.CommentMap, n ast.Node, p token.Pos, option string) bool {
+	for _, cg := range cm[n] {
+		if hasDirective(cg, ignore) {
+			return true
+		}
+	}
+	// Try to find an "enclosing" node which the ast.CommentMap will
+	// thus have associated comments to this field selector.
+	for node := range cm {
+		if p >= node.Pos() && p <= node.End() {
+			for _, cg := range cm[node] {
+				if hasDirective(cg, option) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

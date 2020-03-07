@@ -209,6 +209,26 @@ func TestRun(t *testing.T) {
 			dir:   "i",
 			paths: "os.{O_RDONLY,ErrNotExist,File}",
 		},
+		{
+			name:  "unwanted errors package present but it has ignore directive",
+			dir:   "j",
+			paths: "errors,fmt",
+		},
+		{
+			name:  "unwanted errors package present but file has file-ignore directive",
+			dir:   "k",
+			paths: "errors",
+		},
+		{
+			name:  "unwanted errors.New function present but it has ignore directive",
+			dir:   "l",
+			paths: "errors.{New}",
+		},
+		{
+			name:  "multiple unwanted errors.New functions present but one has ignore directive",
+			dir:   "m",
+			paths: "errors.{New}",
+		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
 			f := NewAnalyzer()
