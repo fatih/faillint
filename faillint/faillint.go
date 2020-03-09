@@ -108,7 +108,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
-		if hasDirective(file.Doc, fileIgnoreKey) {
+		if hasDirective(pass, file.Doc, fileIgnoreKey) {
 			continue
 		}
 		commentMap := ast.NewCommentMap(pass.Fset, file, file.Comments)
@@ -118,10 +118,10 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 				continue
 			}
 			for _, spec := range specs {
-				if usageHasDirective(commentMap, spec, spec.Pos(), ignoreKey) {
+				if usageHasDirective(pass, commentMap, spec, spec.Pos(), ignoreKey) {
 					continue
 				}
-				usages := importUsages(commentMap, file, spec)
+				usages := importUsages(pass, commentMap, file, spec)
 				if len(usages) == 0 {
 					continue
 				}
@@ -160,7 +160,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 const unspecifiedUsage = "unspecified"
 
 // importUsages reports all exported declaration used for a given import.
-func importUsages(commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
+func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 	importRef := spec.Name.String()
 	switch importRef {
 	case "<nil>":
@@ -183,7 +183,7 @@ func importUsages(commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) 
 			return true
 		}
 		if isTopName(sel.X, importRef) {
-			if usageHasDirective(commentMap, n, sel.Sel.NamePos, ignoreKey) {
+			if usageHasDirective(pass, commentMap, n, sel.Sel.NamePos, ignoreKey) {
 				return true
 			}
 			usages[sel.Sel.Name] = append(usages[sel.Sel.Name], sel.Sel.NamePos)
@@ -219,21 +219,31 @@ func isTopName(n ast.Expr, name string) bool {
 	return ok && id.Name == name && id.Obj == nil
 }
 
-func parseDirective(s string) (option string) {
+func parseDirective(s string) (option string, reason string) {
 	if !strings.HasPrefix(s, "//faillint:") {
-		return ""
+		return "", ""
 	}
 	s = strings.TrimPrefix(s, "//faillint:")
-	fields := strings.Split(s, " ")
-	return fields[0]
+	fields := strings.SplitN(s, " ", 2)
+	switch len(fields) {
+	case 0:
+		return "", ""
+	case 1:
+		return fields[0], ""
+	default:
+		return fields[0], fields[1]
+	}
 }
 
-func hasDirective(cg *ast.CommentGroup, option string) bool {
+func hasDirective(pass *analysis.Pass, cg *ast.CommentGroup, option string) bool {
 	if cg == nil {
 		return false
 	}
 	for _, c := range cg.List {
-		o := parseDirective(c.Text)
+		o, reason := parseDirective(c.Text)
+		if (o == ignoreKey || o == fileIgnoreKey) && reason == "" {
+			pass.Reportf(c.Pos(), "missing reason on faillint directive")
+		}
 		if o == option {
 			return true
 		}
@@ -241,9 +251,9 @@ func hasDirective(cg *ast.CommentGroup, option string) bool {
 	return false
 }
 
-func usageHasDirective(cm ast.CommentMap, n ast.Node, p token.Pos, option string) bool {
+func usageHasDirective(pass *analysis.Pass, cm ast.CommentMap, n ast.Node, p token.Pos, option string) bool {
 	for _, cg := range cm[n] {
-		if hasDirective(cg, ignoreKey) {
+		if hasDirective(pass, cg, ignoreKey) {
 			return true
 		}
 	}
@@ -252,7 +262,7 @@ func usageHasDirective(cm ast.CommentMap, n ast.Node, p token.Pos, option string
 	for node := range cm {
 		if p >= node.Pos() && p <= node.End() {
 			for _, cg := range cm[node] {
-				if hasDirective(cg, option) {
+				if hasDirective(pass, cg, option) {
 					return true
 				}
 			}
