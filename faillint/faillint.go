@@ -244,6 +244,9 @@ func hasDirective(pass *analysis.Pass, cg *ast.CommentGroup, option string) bool
 		if (o == ignoreKey || o == fileIgnoreKey) && reason == "" {
 			pass.Reportf(c.Pos(), "missing reason on faillint directive")
 		}
+		if o == fileIgnoreKey && option == ignoreKey {
+			pass.Reportf(c.Pos(), "%s option on faillint directive must be in package docs", fileIgnoreKey)
+		}
 		if o == option {
 			return true
 		}
