@@ -64,7 +64,6 @@ If you have a preferred import path to suggest, append the suggestion after a `=
 ### Ignoring problems
 
 If you want to ignore a problem reported by `faillint` you can add a linter directive.
-The format of a directive is based on the format other linters, such as `staticcheck`, use and there are two types: line-based and file-based.
 
 #### Line-based linter directives
 
