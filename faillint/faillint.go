@@ -14,6 +14,13 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
+const (
+	// ignoreKey is used in a faillint directive to ignore a line-based problem.
+	ignoreKey     = "ignore"
+	// fileIgnoreKey is used in a faillint directive to ignore a whole file.
+	fileIgnoreKey = "file-ignore"
+)
+
 // pathsRegexp represents a regexp that is used to parse -paths flag.
 // It parses flag content in set of 3 subgroups:
 //
@@ -101,7 +108,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
-		if hasDirective(file.Doc, fileignore) {
+		if hasDirective(file.Doc, fileIgnoreKey) {
 			continue
 		}
 		commentMap := ast.NewCommentMap(pass.Fset, file, file.Comments)
@@ -111,7 +118,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 				continue
 			}
 			for _, spec := range specs {
-				if usageHasDirective(commentMap, spec, spec.Pos(), ignore) {
+				if usageHasDirective(commentMap, spec, spec.Pos(), ignoreKey) {
 					continue
 				}
 				usages := importUsages(commentMap, file, spec)
@@ -176,7 +183,7 @@ func importUsages(commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) 
 			return true
 		}
 		if isTopName(sel.X, importRef) {
-			if usageHasDirective(commentMap, n, sel.Sel.NamePos, ignore) {
+			if usageHasDirective(commentMap, n, sel.Sel.NamePos, ignoreKey) {
 				return true
 			}
 			usages[sel.Sel.Name] = append(usages[sel.Sel.Name], sel.Sel.NamePos)
@@ -221,11 +228,6 @@ func parseDirective(s string) (option string) {
 	return fields[0]
 }
 
-const (
-	ignore     = "ignore"
-	fileignore = "file-ignore"
-)
-
 func hasDirective(cg *ast.CommentGroup, option string) bool {
 	if cg == nil {
 		return false
@@ -241,7 +243,7 @@ func hasDirective(cg *ast.CommentGroup, option string) bool {
 
 func usageHasDirective(cm ast.CommentMap, n ast.Node, p token.Pos, option string) bool {
 	for _, cg := range cm[n] {
-		if hasDirective(cg, ignore) {
+		if hasDirective(cg, ignoreKey) {
 			return true
 		}
 	}
