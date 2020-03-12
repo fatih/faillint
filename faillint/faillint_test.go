@@ -2,6 +2,8 @@ package faillint
 
 import (
 	"fmt"
+	"go/ast"
+	"golang.org/x/tools/go/analysis"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -240,6 +242,78 @@ func TestRun(t *testing.T) {
 			// No assertion on result is required as 'analysistest' is for that.
 			// All expected diagnosis should be specified by comment in affected file starting with `// want`.
 			_ = analysistest.Run(t, testdata, f, tcase.dir)
+		})
+	}
+}
+
+func TestHasDirective(t *testing.T) {
+	type input struct {
+		comments []*ast.Comment
+		option   string
+	}
+	type expected struct {
+		out     bool
+		message string
+	}
+	for _, tcase := range []struct {
+		name     string
+		input    input
+		expected expected
+	}{
+		{
+			name: "missing reason on ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//faillint:ignore"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out:     true,
+				message: fmt.Sprintf(missingReasonTemplate, "ignore"),
+			},
+		},
+		{
+			name: "missing reason on file-ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//faillint:file-ignore"},
+				},
+				option: fileIgnoreKey,
+			},
+			expected: expected{
+				out:     true,
+				message: fmt.Sprintf(missingReasonTemplate, "file-ignore"),
+			},
+		},
+		{
+			name: "file-ignore when ignore expected",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//faillint:file-ignore"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out:     false,
+				message: fmt.Sprintf(unexpectedFileIgnoreTemplate, "file-ignore"),
+			},
+		},
+	} {
+		t.Run(tcase.name, func(t *testing.T) {
+			var diagnostic analysis.Diagnostic
+			pass := analysis.Pass{
+				Report: func(d analysis.Diagnostic) {
+					diagnostic = d
+				},
+			}
+			got := hasDirective(&pass, &ast.CommentGroup{List: tcase.input.comments}, tcase.input.option)
+			if got != tcase.expected.out {
+				t.Errorf("expected hasDirective to return %v, got %v", tcase.expected.out, got)
+			}
+			if diagnostic.Message != tcase.expected.message {
+				t.Errorf("expected diagnostic message: `%s`, got: `%s`", tcase.expected.message, diagnostic.Message)
+			}
 		})
 	}
 }

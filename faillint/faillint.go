@@ -19,6 +19,10 @@ const (
 	ignoreKey     = "ignore"
 	// fileIgnoreKey is used in a faillint directive to ignore a whole file.
 	fileIgnoreKey = "file-ignore"
+	// missingReasonTemplate is used when a faillint directive is missing a reason.
+	missingReasonTemplate = "missing reason on faillint:%s directive"
+	// unexpectedFileIgnoreTemplate is used when a faillint:file-ignore directive is found outside package docs.
+	unexpectedFileIgnoreTemplate = "%s option on faillint directive must only be in package docs"
 )
 
 // pathsRegexp represents a regexp that is used to parse -paths flag.
@@ -242,10 +246,10 @@ func hasDirective(pass *analysis.Pass, cg *ast.CommentGroup, option string) bool
 	for _, c := range cg.List {
 		o, reason := parseDirective(c.Text)
 		if (o == ignoreKey || o == fileIgnoreKey) && reason == "" {
-			pass.Reportf(c.Pos(), "missing reason on faillint directive")
+			pass.Reportf(c.Pos(), missingReasonTemplate, o)
 		}
 		if o == fileIgnoreKey && option == ignoreKey {
-			pass.Reportf(c.Pos(), "%s option on faillint directive must be in package docs", fileIgnoreKey)
+			pass.Reportf(c.Pos(), unexpectedFileIgnoreTemplate, fileIgnoreKey)
 		}
 		if o == option {
 			return true
