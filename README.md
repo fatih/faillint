@@ -98,7 +98,7 @@ File-based linter directives can be applied to ignore `faillint` problems in a w
 //faillint:file-ignore reason
 ```
 
-This must be placed in the `package` docs and, conventionally, these comments should be placed near the top of the file.
+This may be placed anywhere in the file but conventionally it should be placed at, or near, the top of the file.
 
 For example,
 

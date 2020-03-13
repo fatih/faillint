@@ -112,7 +112,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
-		if hasDirective(pass, file.Doc, fileIgnoreKey) {
+		if anyHasDirective(pass, file.Comments, fileIgnoreKey) {
 			continue
 		}
 		commentMap := ast.NewCommentMap(pass.Fset, file, file.Comments)
@@ -237,6 +237,15 @@ func parseDirective(s string) (option string, reason string) {
 	default:
 		return fields[0], fields[1]
 	}
+}
+
+func anyHasDirective(pass *analysis.Pass, cgs []*ast.CommentGroup, option string) bool {
+	for _, cg := range cgs {
+		if hasDirective(pass, cg, option) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasDirective(pass *analysis.Pass, cg *ast.CommentGroup, option string) bool {
