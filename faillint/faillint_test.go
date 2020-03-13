@@ -231,6 +231,11 @@ func TestRun(t *testing.T) {
 			dir:   "m",
 			paths: "errors.{New}",
 		},
+		{
+			name:  "unwanted errors package present but file has file-ignore directive",
+			dir:   "n",
+			paths: "errors",
+		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
 			f := NewAnalyzer()
