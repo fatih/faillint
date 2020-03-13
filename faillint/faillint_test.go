@@ -274,12 +274,12 @@ func TestHasDirective(t *testing.T) {
 			name: "missing reason on ignore",
 			input: input{
 				comments: []*ast.Comment{
-					{Text: "//faillint:ignore"},
+					{Text: "//lint:ignore faillint"},
 				},
 				option: ignoreKey,
 			},
 			expected: expected{
-				out:     true,
+				out:     false,
 				message: fmt.Sprintf(missingReasonTemplate, "ignore"),
 			},
 		},
@@ -287,12 +287,12 @@ func TestHasDirective(t *testing.T) {
 			name: "missing reason on file-ignore",
 			input: input{
 				comments: []*ast.Comment{
-					{Text: "//faillint:file-ignore"},
+					{Text: "//lint:file-ignore faillint"},
 				},
 				option: fileIgnoreKey,
 			},
 			expected: expected{
-				out:     true,
+				out:     false,
 				message: fmt.Sprintf(missingReasonTemplate, "file-ignore"),
 			},
 		},
@@ -300,7 +300,7 @@ func TestHasDirective(t *testing.T) {
 			name: "valid ignore",
 			input: input{
 				comments: []*ast.Comment{
-					{Text: "//faillint:ignore reason"},
+					{Text: "//lint:ignore faillint reason"},
 				},
 				option: ignoreKey,
 			},
@@ -312,12 +312,25 @@ func TestHasDirective(t *testing.T) {
 			name: "valid file-ignore",
 			input: input{
 				comments: []*ast.Comment{
-					{Text: "//faillint:file-ignore reason"},
+					{Text: "//lint:file-ignore faillint reason"},
 				},
 				option: fileIgnoreKey,
 			},
 			expected: expected{
 				out: true,
+			},
+		},
+		{
+			name: "invalid option on faillint directive",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//lint:foo faillint reason"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out:     false,
+				message: fmt.Sprintf(unrecognizedOptionTemplate, "foo"),
 			},
 		},
 	} {

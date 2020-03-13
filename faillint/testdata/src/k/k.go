@@ -1,4 +1,4 @@
-//faillint:file-ignore ignore faillint in this file
+//lint:file-ignore faillint ignore faillint in this file
 package k
 
 import (

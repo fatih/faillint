@@ -1,9 +1,9 @@
 package j
 
 import (
-	//faillint:ignore tolerate this errors import
+	//lint:ignore faillint tolerate this errors import
 	"errors"
-	"fmt" //faillint:ignore tolerate this fmt import
+	"fmt" //lint:ignore faillint tolerate this fmt import
 )
 
 func foo() error {

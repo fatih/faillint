@@ -63,14 +63,14 @@ If you have a preferred import path to suggest, append the suggestion after a `=
 
 ### Ignoring problems
 
-If you want to ignore a problem reported by `faillint` you can add a linter directive.
+If you want to ignore a problem reported by `faillint` you can add a lint directive based on [staticcheck](https://staticcheck.io)'s design.
 
-#### Line-based linter directives
+#### Line-based lint directives
 
-Line-based linter directives can be applied to imports or functions you want to tolerate.  The format is,
+Line-based lint directives can be applied to imports or functions you want to tolerate.  The format is,
 
 ```go
-//faillint:ignore reason
+//lint:ignore faillint reason
 ```
 
 For example,
@@ -79,23 +79,23 @@ For example,
 package a
 
 import (
-        //faillint:ignore Whatever your reason is.
+        //lint:ignore faillint Whatever your reason is.
         "errors"
-        "fmt" //faillint:ignore Whatever your reason is.
+        "fmt" //lint:ignore faillint Whatever your reason is.
 )
 
 func foo() error {
-        //faillint:ignore Whatever your reason is.
+        //lint:ignore faillint Whatever your reason is.
         return errors.New("bar!")
 }
 ```
 
-#### File-based linter directives
+#### File-based lint directives
 
-File-based linter directives can be applied to ignore `faillint` problems in a whole file.  The format is,
+File-based lint directives can be applied to ignore `faillint` problems in a whole file.  The format is,
 
 ```go
-//faillint:file-ignore reason
+//lint:file-ignore faillint reason
 ```
 
 This may be placed anywhere in the file but conventionally it should be placed at, or near, the top of the file.
@@ -103,7 +103,8 @@ This may be placed anywhere in the file but conventionally it should be placed a
 For example,
 
 ```go
-//faillint:file-ignore This file should be ignored by faillint.
+//lint:file-ignore faillint This file should be ignored by faillint.
+
 package a
 
 import (

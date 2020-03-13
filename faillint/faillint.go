@@ -21,6 +21,8 @@ const (
 	fileIgnoreKey = "file-ignore"
 	// missingReasonTemplate is used when a faillint directive is missing a reason.
 	missingReasonTemplate = "missing reason on faillint:%s directive"
+	// unrecognizedOptionTemplate is used when a faillint directive has an option other than ignore or file-ignore.
+	unrecognizedOptionTemplate = "unrecognized option on faillint directive: %s"
 )
 
 // pathsRegexp represents a regexp that is used to parse -paths flag.
@@ -221,20 +223,33 @@ func isTopName(n ast.Expr, name string) bool {
 	return ok && id.Name == name && id.Obj == nil
 }
 
-func parseDirective(s string) (option string, reason string) {
-	if !strings.HasPrefix(s, "//faillint:") {
-		return "", ""
+func parseDirective(pass *analysis.Pass, c *ast.Comment) (option string) {
+	s := c.Text
+	if !strings.HasPrefix(s, "//lint:") {
+		return ""
 	}
-	s = strings.TrimPrefix(s, "//faillint:")
-	fields := strings.SplitN(s, " ", 2)
-	switch len(fields) {
-	case 0:
-		return "", ""
-	case 1:
-		return fields[0], ""
-	default:
-		return fields[0], fields[1]
+	s = strings.TrimPrefix(s, "//lint:")
+	fields := strings.SplitN(s, " ", 3)
+
+	if len(fields) < 2 {
+		return ""
 	}
+
+	if fields[1] != "faillint" {
+		return ""
+	}
+
+	if fields[0] != ignoreKey && fields[0] != fileIgnoreKey {
+		pass.Reportf(c.Pos(), unrecognizedOptionTemplate, fields[0])
+		return ""
+	}
+
+	if len(fields) < 3 {
+		pass.Reportf(c.Pos(), missingReasonTemplate, fields[0])
+		return ""
+	}
+
+	return fields[0]
 }
 
 func anyHasDirective(pass *analysis.Pass, cgs []*ast.CommentGroup, option string) bool {
@@ -251,11 +266,7 @@ func hasDirective(pass *analysis.Pass, cg *ast.CommentGroup, option string) bool
 		return false
 	}
 	for _, c := range cg.List {
-		o, reason := parseDirective(c.Text)
-		if (o == ignoreKey || o == fileIgnoreKey) && reason == "" {
-			pass.Reportf(c.Pos(), missingReasonTemplate, o)
-		}
-		if o == option {
+		if parseDirective(pass, c) == option {
 			return true
 		}
 	}
