@@ -299,6 +299,30 @@ func TestHasDirective(t *testing.T) {
 				message: fmt.Sprintf(unexpectedFileIgnoreTemplate, "file-ignore"),
 			},
 		},
+		{
+			name: "valid ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//faillint:ignore reason"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out: true,
+			},
+		},
+		{
+			name: "valid file-ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//faillint:file-ignore reason"},
+				},
+				option: fileIgnoreKey,
+			},
+			expected: expected{
+				out: true,
+			},
+		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
 			var diagnostic analysis.Diagnostic
