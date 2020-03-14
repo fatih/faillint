@@ -14,6 +14,17 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
+const (
+	// ignoreKey is used in a faillint directive to ignore a line-based problem.
+	ignoreKey     = "ignore"
+	// fileIgnoreKey is used in a faillint directive to ignore a whole file.
+	fileIgnoreKey = "file-ignore"
+	// missingReasonTemplate is used when a faillint directive is missing a reason.
+	missingReasonTemplate = "missing reason on faillint:%s directive"
+	// unrecognizedOptionTemplate is used when a faillint directive has an option other than ignore or file-ignore.
+	unrecognizedOptionTemplate = "unrecognized option on faillint directive: %s"
+)
+
 // pathsRegexp represents a regexp that is used to parse -paths flag.
 // It parses flag content in set of 3 subgroups:
 //
@@ -101,13 +112,20 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}
+		if anyHasDirective(pass, file.Comments, fileIgnoreKey) {
+			continue
+		}
+		commentMap := ast.NewCommentMap(pass.Fset, file, file.Comments)
 		for _, path := range parsePaths(f.paths) {
 			specs := importSpec(file, path.imp)
 			if len(specs) == 0 {
 				continue
 			}
 			for _, spec := range specs {
-				usages := importUsages(file, spec)
+				if usageHasDirective(pass, commentMap, spec, spec.Pos(), ignoreKey) {
+					continue
+				}
+				usages := importUsages(pass, commentMap, file, spec)
 				if len(usages) == 0 {
 					continue
 				}
@@ -146,7 +164,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 const unspecifiedUsage = "unspecified"
 
 // importUsages reports all exported declaration used for a given import.
-func importUsages(f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
+func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 	importRef := spec.Name.String()
 	switch importRef {
 	case "<nil>":
@@ -169,6 +187,9 @@ func importUsages(f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 			return true
 		}
 		if isTopName(sel.X, importRef) {
+			if usageHasDirective(pass, commentMap, n, sel.Sel.NamePos, ignoreKey) {
+				return true
+			}
 			usages[sel.Sel.Name] = append(usages[sel.Sel.Name], sel.Sel.NamePos)
 		}
 		return true
@@ -200,4 +221,74 @@ func importPath(s *ast.ImportSpec) string {
 func isTopName(n ast.Expr, name string) bool {
 	id, ok := n.(*ast.Ident)
 	return ok && id.Name == name && id.Obj == nil
+}
+
+func parseDirective(pass *analysis.Pass, c *ast.Comment) (option string) {
+	s := c.Text
+	if !strings.HasPrefix(s, "//lint:") {
+		return ""
+	}
+	s = strings.TrimPrefix(s, "//lint:")
+	fields := strings.SplitN(s, " ", 3)
+
+	if len(fields) < 2 {
+		return ""
+	}
+
+	if fields[1] != "faillint" {
+		return ""
+	}
+
+	if fields[0] != ignoreKey && fields[0] != fileIgnoreKey {
+		pass.Reportf(c.Pos(), unrecognizedOptionTemplate, fields[0])
+		return ""
+	}
+
+	if len(fields) < 3 {
+		pass.Reportf(c.Pos(), missingReasonTemplate, fields[0])
+		return ""
+	}
+
+	return fields[0]
+}
+
+func anyHasDirective(pass *analysis.Pass, cgs []*ast.CommentGroup, option string) bool {
+	for _, cg := range cgs {
+		if hasDirective(pass, cg, option) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDirective(pass *analysis.Pass, cg *ast.CommentGroup, option string) bool {
+	if cg == nil {
+		return false
+	}
+	for _, c := range cg.List {
+		if parseDirective(pass, c) == option {
+			return true
+		}
+	}
+	return false
+}
+
+func usageHasDirective(pass *analysis.Pass, cm ast.CommentMap, n ast.Node, p token.Pos, option string) bool {
+	for _, cg := range cm[n] {
+		if hasDirective(pass, cg, ignoreKey) {
+			return true
+		}
+	}
+	// Try to find an "enclosing" node which the ast.CommentMap will
+	// thus have associated comments to this field selector.
+	for node := range cm {
+		if p >= node.Pos() && p <= node.End() {
+			for _, cg := range cm[node] {
+				if hasDirective(pass, cg, option) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

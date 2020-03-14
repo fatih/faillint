@@ -2,6 +2,8 @@ package faillint
 
 import (
 	"fmt"
+	"go/ast"
+	"golang.org/x/tools/go/analysis"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -209,6 +211,36 @@ func TestRun(t *testing.T) {
 			dir:   "i",
 			paths: "os.{O_RDONLY,ErrNotExist,File}",
 		},
+		{
+			name:  "unwanted errors package present but it has ignore directive",
+			dir:   "j",
+			paths: "errors,fmt",
+		},
+		{
+			name:  "unwanted errors package present but file has file-ignore directive",
+			dir:   "k",
+			paths: "errors",
+		},
+		{
+			name:  "unwanted errors.New function present but it has ignore directive",
+			dir:   "l",
+			paths: "errors.{New}",
+		},
+		{
+			name:  "multiple unwanted errors.New functions present but one has ignore directive",
+			dir:   "m",
+			paths: "errors.{New}",
+		},
+		{
+			name:  "unwanted errors package present but file has file-ignore directive",
+			dir:   "n",
+			paths: "errors",
+		},
+		{
+			name:  "unwanted errors package present but file has file-ignore directive before package comment",
+			dir:   "o",
+			paths: "errors",
+		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
 			f := NewAnalyzer()
@@ -220,6 +252,102 @@ func TestRun(t *testing.T) {
 			// No assertion on result is required as 'analysistest' is for that.
 			// All expected diagnosis should be specified by comment in affected file starting with `// want`.
 			_ = analysistest.Run(t, testdata, f, tcase.dir)
+		})
+	}
+}
+
+func TestHasDirective(t *testing.T) {
+	type input struct {
+		comments []*ast.Comment
+		option   string
+	}
+	type expected struct {
+		out     bool
+		message string
+	}
+	for _, tcase := range []struct {
+		name     string
+		input    input
+		expected expected
+	}{
+		{
+			name: "missing reason on ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//lint:ignore faillint"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out:     false,
+				message: fmt.Sprintf(missingReasonTemplate, "ignore"),
+			},
+		},
+		{
+			name: "missing reason on file-ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//lint:file-ignore faillint"},
+				},
+				option: fileIgnoreKey,
+			},
+			expected: expected{
+				out:     false,
+				message: fmt.Sprintf(missingReasonTemplate, "file-ignore"),
+			},
+		},
+		{
+			name: "valid ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//lint:ignore faillint reason"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out: true,
+			},
+		},
+		{
+			name: "valid file-ignore",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//lint:file-ignore faillint reason"},
+				},
+				option: fileIgnoreKey,
+			},
+			expected: expected{
+				out: true,
+			},
+		},
+		{
+			name: "invalid option on faillint directive",
+			input: input{
+				comments: []*ast.Comment{
+					{Text: "//lint:foo faillint reason"},
+				},
+				option: ignoreKey,
+			},
+			expected: expected{
+				out:     false,
+				message: fmt.Sprintf(unrecognizedOptionTemplate, "foo"),
+			},
+		},
+	} {
+		t.Run(tcase.name, func(t *testing.T) {
+			var diagnostic analysis.Diagnostic
+			pass := analysis.Pass{
+				Report: func(d analysis.Diagnostic) {
+					diagnostic = d
+				},
+			}
+			got := hasDirective(&pass, &ast.CommentGroup{List: tcase.input.comments}, tcase.input.option)
+			if got != tcase.expected.out {
+				t.Errorf("expected hasDirective to return %v, got %v", tcase.expected.out, got)
+			}
+			if diagnostic.Message != tcase.expected.message {
+				t.Errorf("expected diagnostic message: `%s`, got: `%s`", tcase.expected.message, diagnostic.Message)
+			}
 		})
 	}
 }

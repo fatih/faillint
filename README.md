@@ -2,13 +2,13 @@
 
 Faillint is a simple Go linter that fails when a specific set of import paths
 or exported path's functions, constant, vars or types are used. It's meant to be
-used in CI/CD environments to catch rules you want to enforce in your projects. 
+used in CI/CD environments to catch rules you want to enforce in your projects.
 
 As an example, you could enforce the usage of `github.com/pkg/errors` instead
 of the `errors` package. To prevent the usage of the `errors` package, you can
 configure `faillint` to fail whenever someone imports the `errors` package in
-this case. To make sure `fmt.Errorf` is not used for creating errors as well, 
-you can configure to fail on such single function of `fmt` as well. 
+this case. To make sure `fmt.Errorf` is not used for creating errors as well,
+you can configure to fail on such single function of `fmt` as well.
 
 ![faillint](https://user-images.githubusercontent.com/438920/74105802-f7158300-4b15-11ea-8e23-16be5cd3b971.gif)
 
@@ -61,6 +61,61 @@ If you have a preferred import path to suggest, append the suggestion after a `=
 -paths "fmt.{Errorf}=github.com/pkg/errors.{Errorf}"
 ```
 
+### Ignoring problems
+
+If you want to ignore a problem reported by `faillint` you can add a lint directive based on [staticcheck](https://staticcheck.io)'s design.
+
+#### Line-based lint directives
+
+Line-based lint directives can be applied to imports or functions you want to tolerate.  The format is,
+
+```go
+//lint:ignore faillint reason
+```
+
+For example,
+
+```go
+package a
+
+import (
+        //lint:ignore faillint Whatever your reason is.
+        "errors"
+        "fmt" //lint:ignore faillint Whatever your reason is.
+)
+
+func foo() error {
+        //lint:ignore faillint Whatever your reason is.
+        return errors.New("bar!")
+}
+```
+
+#### File-based lint directives
+
+File-based lint directives can be applied to ignore `faillint` problems in a whole file.  The format is,
+
+```go
+//lint:file-ignore faillint reason
+```
+
+This may be placed anywhere in the file but conventionally it should be placed at, or near, the top of the file.
+
+For example,
+
+```go
+//lint:file-ignore faillint This file should be ignored by faillint.
+
+package a
+
+import (
+        "errors"
+)
+
+func foo() error {
+        return errors.New("bar!")
+}
+```
+
 ## Example
 
 Assume we have the following file:
@@ -87,7 +142,7 @@ a.go:4:2: package "errors" shouldn't be imported, suggested: "github.com/pkg/err
 ## The need for this tool?
 
 Most of these checks should be probably detected during the review cycle. But
-it's totally normal to accidentally import them (we're all humans in the end). 
+it's totally normal to accidentally import them (we're all humans in the end).
 
 Second, tools like `goimports` favors certain packages. As an example going
 forward if you decided to use `github.com/pkg/errors` in you project, and write
