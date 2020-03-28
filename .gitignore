@@ -15,3 +15,6 @@ faillint/testdata/pkg
 
 # IDE workspace files
 /.vscode/
+
+# Ignore vendor directory
+/vendor
