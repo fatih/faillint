@@ -24,25 +24,45 @@ const (
 	missingReasonTemplate = "missing reason on faillint:%s directive"
 	// unrecognizedOptionTemplate is used when a faillint directive has an option other than ignore or file-ignore.
 	unrecognizedOptionTemplate = "unrecognized option on faillint directive: %s"
+
+	unspecifiedUsage = "unspecified"
 )
 
-// pathsRegexp represents a regexp that is used to parse -paths flag.
-// It parses flag content in set of 3 subgroups:
-//
-// * import: Mandatory part. Go import path in URL format to be unwanted or have unwanted declarations.
-// * declarations: Optional declarations in `{ }`. If set, using the import is allowed expect give declarations.
-// * suggestion: Optional suggestion to print when unwanted import or declaration is found.
-//
-var pathsRegexp = regexp.MustCompile(`(?P<import>[\w/.-]+[\w])(\.?{(?P<declarations>[\w-,]+)}|)(=(?P<suggestion>[\w/.-]+[\w](\.?{[\w-,]+}|))|)`)
+var (
+	// Analyzer is a global instance of the linter.
+	// DEPRECATED: Use faillint.New instead.
+	Analyzer = NewAnalyzer()
+
+	// pathsRegexp represents a regexp that is used to parse -paths flag.
+	// It parses flag content in set of 3 subgroups:
+	//
+	// * import: Mandatory part. Go import path in URL format to be unwanted or have unwanted declarations.
+	// * recursive: Optional part. Import paths in the form of foo/bar/... indicates that all recursive sub matchs should be also matched.
+	// * declarations: Optional declarations in `{ }`. If set, using the import is allowed expect give declarations.
+	// * suggestion: Optional suggestion to print when unwanted import or declaration is found.
+	pathsRegexp = regexp.MustCompile(`(?P<import>[\w/.-]+[\w])(/?(?P<recursive>\.\.\.)|)(\.?{(?P<declarations>[\w-,]+)}|)(=(?P<suggestion>[\w/.-]+[\w](\.?{[\w-,]+}|))|)`)
+)
+
+// path represents a single parsed directive parsed with the pathsRegexp regex
+type path struct {
+	// imp contains the full import path
+	imp string
+
+	// recursive is true if the import path should encapsulate all sub paths
+	// for the given import path as well.
+	recursive bool
+
+	// declarations contains the declarations to fail for the given import path
+	decls []string
+
+	// sugg defines the suggestion for a given import path
+	sugg string
+}
 
 type faillint struct {
 	paths       string // -paths flag
 	ignoretests bool   // -ignore-tests flag
 }
-
-// Analyzer is a global instance of the linter.
-// DEPRECATED: Use faillint.New instead.
-var Analyzer = NewAnalyzer()
 
 // NewAnalyzer create a faillint analyzer.
 func NewAnalyzer() *analysis.Analyzer {
@@ -57,8 +77,19 @@ func NewAnalyzer() *analysis.Analyzer {
 		RunDespiteErrors: true,
 	}
 
-	a.Flags.StringVar(&f.paths, "paths", "", `import paths or exported declarations (i.e: functions, constant, types or variables) to fail.
-E.g. errors=github.com/pkg/errors,fmt.{Errorf}=github.com/pkg/errors.{Errorf},fmt.{Println,Print,Printf},github.com/prometheus/client_golang/prometheus.{DefaultGatherer,MustRegister}`)
+	a.Flags.StringVar(&f.paths, "paths", "", `import paths or exported declarations (i.e: functions, constant, types or variables) to fail. E.g.:
+
+Fail on the usage of errors and fmt.Errorf. Also suggest packages for the failures
+  --paths errors=github.com/pkg/errors,fmt.{Errorf}=github.com/pkg/errors.{Errorf}
+
+Fail on the usage of fmt.Println, fmt.Print and fmt.Printf
+  --paths fmt.{Println,Print,Printf}
+
+Fail on the usage of prometheus.DefaultGatherer and prometheus.MustRegister
+  --paths github.com/prometheus/client_golang/prometheus.{DefaultGatherer,MustRegister}
+
+Fail on the usage of errors, golang.org/x/net and all sub packages under golang.org/x/net
+  --paths errors,golang.org/x/net/...`)
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
 	return a
 }
@@ -72,36 +103,6 @@ func trimAllWhitespaces(str string) string {
 		}
 	}
 	return b.String()
-}
-
-type path struct {
-	imp   string
-	decls []string
-	sugg  string
-}
-
-func parsePaths(paths string) []path {
-	pathGroups := pathsRegexp.FindAllStringSubmatch(trimAllWhitespaces(paths), -1)
-
-	parsed := make([]path, 0, len(pathGroups))
-	for _, group := range pathGroups {
-		p := path{}
-		for i, name := range pathsRegexp.SubexpNames() {
-			switch name {
-			case "import":
-				p.imp = group[i]
-			case "suggestion":
-				p.sugg = group[i]
-			case "declarations":
-				if group[i] == "" {
-					break
-				}
-				p.decls = strings.Split(group[i], ",")
-			}
-		}
-		parsed = append(parsed, p)
-	}
-	return parsed
 }
 
 // run is the runner for an analysis pass.
@@ -129,14 +130,16 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		}
 		commentMap := ast.NewCommentMap(pass.Fset, file, file.Comments)
 		for _, path := range parsePaths(f.paths) {
-			specs := importSpec(file, path.imp)
+			specs := importSpec(file, path.imp, path.recursive)
 			if len(specs) == 0 {
 				continue
 			}
+
 			for _, spec := range specs {
 				if usageHasDirective(pass, commentMap, spec, spec.Pos(), ignoreKey) {
 					continue
 				}
+
 				usages := importUsages(pass, commentMap, file, spec)
 				if len(usages) == 0 {
 					continue
@@ -173,8 +176,6 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil
 }
 
-const unspecifiedUsage = "unspecified"
-
 // importUsages reports all exported declaration used for a given import.
 func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
 	importRef := spec.Name.String()
@@ -210,9 +211,17 @@ func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, s
 }
 
 // importSpecs returns all import specs for f import statements importing path.
-func importSpec(f *ast.File, path string) (imports []*ast.ImportSpec) {
+func importSpec(f *ast.File, path string, recursive bool) (imports []*ast.ImportSpec) {
 	for _, s := range f.Imports {
-		if importPath(s) == path {
+		impPath := importPath(s)
+		if impPath == path {
+			imports = append(imports, s)
+		} else if recursive && strings.HasPrefix(impPath, path+"/") {
+			// match all subpaths as well, i.e:
+			//   impPath = golang.org/x/net/context
+			//      path = golang.org/x/net
+			// We add the "/" so we don't match packages with dashes, such as
+			// `golang.org/x/net-
 			imports = append(imports, s)
 		}
 	}
@@ -303,4 +312,30 @@ func usageHasDirective(pass *analysis.Pass, cm ast.CommentMap, n ast.Node, p tok
 		}
 	}
 	return false
+}
+
+func parsePaths(paths string) []path {
+	pathGroups := pathsRegexp.FindAllStringSubmatch(trimAllWhitespaces(paths), -1)
+
+	parsed := make([]path, 0, len(pathGroups))
+	for _, group := range pathGroups {
+		p := path{}
+		for i, name := range pathsRegexp.SubexpNames() {
+			switch name {
+			case "import":
+				p.imp = group[i]
+			case "recursive":
+				p.recursive = group[i] != ""
+			case "suggestion":
+				p.sugg = group[i]
+			case "declarations":
+				if group[i] == "" {
+					break
+				}
+				p.decls = strings.Split(group[i], ",")
+			}
+		}
+		parsed = append(parsed, p)
+	}
+	return parsed
 }
