@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/analysis"
-
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
@@ -54,53 +53,83 @@ func TestParsePaths(t *testing.T) {
 		{
 			paths: "errors=github.com/pkg/errors",
 			expected: []path{
-				{imp: "errors", sugg: "github.com/pkg/errors"},
+				{
+					imp:  "errors",
+					sugg: "github.com/pkg/errors",
+				},
 			},
 		},
 		{
 			paths: "fmt.{Errorf}=github.com/pkg/errors",
 			expected: []path{
-				{imp: "fmt", decls: []string{"Errorf"}, sugg: "github.com/pkg/errors"},
+				{
+					imp:   "fmt",
+					decls: []string{"Errorf"},
+					sugg:  "github.com/pkg/errors",
+				},
 			},
 		},
 		{
 			paths: "fmt.{Errorf}=github.com/pkg/errors.{Errorf}",
 			expected: []path{
-				{imp: "fmt", decls: []string{"Errorf"}, sugg: "github.com/pkg/errors.{Errorf}"},
+				{
+					imp:   "fmt",
+					decls: []string{"Errorf"},
+					sugg:  "github.com/pkg/errors.{Errorf}",
+				},
 			},
 		},
 		{
 			paths: "fmt.{Errorf,AnotherFunction}=github.com/pkg/errors.{Errorf,AnotherFunction}",
 			expected: []path{
-				{imp: "fmt", decls: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
+				{
+					imp:   "fmt",
+					decls: []string{"Errorf", "AnotherFunction"},
+					sugg:  "github.com/pkg/errors.{Errorf,AnotherFunction}",
+				},
 			},
 		},
 		{
 			// Whitespace madness.
 			paths: "fmt.{Errorf, AnotherFunction}    =   github.com/pkg/errors.{ Errorf,  AnotherFunction}",
 			expected: []path{
-				{imp: "fmt", decls: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
+				{
+					imp:   "fmt",
+					decls: []string{"Errorf", "AnotherFunction"},
+					sugg:  "github.com/pkg/errors.{Errorf,AnotherFunction}",
+				},
 			},
 		},
 		{
 			// Without dot it works too.
 			paths: "fmt{Errorf,AnotherFunction}=github.com/pkg/errors.{Errorf,AnotherFunction}",
 			expected: []path{
-				{imp: "fmt", decls: []string{"Errorf", "AnotherFunction"}, sugg: "github.com/pkg/errors.{Errorf,AnotherFunction}"},
+				{
+					imp:   "fmt",
+					decls: []string{"Errorf", "AnotherFunction"},
+					sugg:  "github.com/pkg/errors.{Errorf,AnotherFunction}",
+				},
 			},
 		},
 		{
 			// Suggestion without { }.
 			paths: "fmt.{Errorf}=github.com/pkg/errors.Errorf",
 			expected: []path{
-				{imp: "fmt", decls: []string{"Errorf"}, sugg: "github.com/pkg/errors.Errorf"},
+				{
+					imp:   "fmt",
+					decls: []string{"Errorf"},
+					sugg:  "github.com/pkg/errors.Errorf",
+				},
 			},
 		},
 		{
 			// TODO(bwplotka): This might be unexpected for users. Probably detect & error (fmt.Errorf) can be valid repository name though.
 			paths: "fmt.Errorf=github.com/pkg/errors.Errorf",
 			expected: []path{
-				{imp: "fmt.Errorf", sugg: "github.com/pkg/errors.Errorf"},
+				{
+					imp:  "fmt.Errorf",
+					sugg: "github.com/pkg/errors.Errorf",
+				},
 			},
 		},
 		{
@@ -108,8 +137,40 @@ func TestParsePaths(t *testing.T) {
 			expected: []path{
 				{imp: "foo"},
 				{imp: "github.com/foo/bar"},
-				{imp: "github.com/foo/bar/foo", decls: []string{"A"}, sugg: "github.com/foo/bar/bar.{C}"},
-				{imp: "github.com/foo/bar/foo", decls: []string{"D", "C"}},
+				{
+					imp:   "github.com/foo/bar/foo",
+					decls: []string{"A"},
+					sugg:  "github.com/foo/bar/bar.{C}",
+				},
+				{
+					imp:   "github.com/foo/bar/foo",
+					decls: []string{"D", "C"},
+				},
+			},
+		},
+		{
+			paths: "golang.org/x/net=net,golang.org/x/net/context=context",
+			expected: []path{
+				{
+					imp:  "golang.org/x/net",
+					sugg: "net",
+				},
+				{
+					imp:  "golang.org/x/net/context",
+					sugg: "context",
+				},
+			},
+		},
+		{
+			paths: "github.com/foo/go/...,errors",
+			expected: []path{
+				{
+					imp:       "github.com/foo/go",
+					recursive: true,
+				},
+				{
+					imp: "errors",
+				},
 			},
 		},
 	} {
@@ -241,6 +302,11 @@ func TestRun(t *testing.T) {
 			name:  "unwanted errors package present but file has file-ignore directive before package comment",
 			dir:   "o",
 			paths: "errors",
+		},
+		{
+			name:  "two paths, one with recursive paths",
+			dir:   "p",
+			paths: "errors=github.com/pkg/errors,golang.org/x/net/...",
 		},
 		{
 			name:  "generated file",

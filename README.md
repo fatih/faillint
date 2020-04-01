@@ -43,6 +43,11 @@ define it with the `-paths` flag, which is comma-separated list. Some examples a
 
 # Fail if any of Print, Printf of Println function were used from fmt library.
 -paths "fmt.{Print,Printf,Println}"
+
+# Fail if the package is imported including sub paths starting with
+  "golang.org/x/net/". In example: `golang.org/x/net/context`, 
+  `golang.org/x/net/nettest`, .nettest`, ...
+-paths "golang.org/x/net/..."
 ```
 
 If you have a preferred import path to suggest, append the suggestion after a `=` character:
