@@ -11,12 +11,13 @@ import (
 	"strings"
 	"unicode"
 
+	"dmitri.shuralyov.com/go/generated"
 	"golang.org/x/tools/go/analysis"
 )
 
 const (
 	// ignoreKey is used in a faillint directive to ignore a line-based problem.
-	ignoreKey     = "ignore"
+	ignoreKey = "ignore"
 	// fileIgnoreKey is used in a faillint directive to ignore a whole file.
 	fileIgnoreKey = "file-ignore"
 	// missingReasonTemplate is used when a faillint directive is missing a reason.
@@ -108,7 +109,18 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 	if f.paths == "" {
 		return nil, nil
 	}
+
 	for _, file := range pass.Files {
+		filename := pass.Fset.File(file.Package).Name()
+		isGenerated, err := generated.ParseFile(filename)
+		if err != nil {
+			return nil, err
+		}
+
+		if isGenerated {
+			continue
+		}
+
 		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
 			continue
 		}

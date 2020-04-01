@@ -3,11 +3,12 @@ package faillint
 import (
 	"fmt"
 	"go/ast"
-	"golang.org/x/tools/go/analysis"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"testing"
+
+	"golang.org/x/tools/go/analysis"
 
 	"golang.org/x/tools/go/analysis/analysistest"
 )
@@ -239,6 +240,11 @@ func TestRun(t *testing.T) {
 		{
 			name:  "unwanted errors package present but file has file-ignore directive before package comment",
 			dir:   "o",
+			paths: "errors",
+		},
+		{
+			name:  "generated file",
+			dir:   "q",
 			paths: "errors",
 		},
 	} {
