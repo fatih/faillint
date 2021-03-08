@@ -1,5 +1,15 @@
 name: build
-on: [push, pull_request]
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+
+
 jobs:
 
   test-build:
@@ -23,3 +33,13 @@ jobs:
 
     - name: Build
       run: go build ./...
+
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v2
+      # only release on tags
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      with:
+        version: v0.156.1
+        args: release --rm-dist
+      env:
+        GITHUB_TOKEN: ${{ secrets.FAILLINT_ACTIONS_BOT_TOKEN }}
