@@ -15,7 +15,30 @@ you can configure to fail on such single function of `fmt` as well.
 ## Install
 
 ```bash
-go get github.com/fatih/faillint
+go install github.com/fatih/faillint@latest
+```
+
+## Example
+
+Assume we have the following file:
+
+```go
+package a
+
+import (
+        "errors"
+)
+
+func foo() error {
+        return errors.New("bar!")
+}
+```
+
+Let's run `faillint` to check if `errors` import is used and report it:
+
+```
+$ faillint -paths "errors=github.com/pkg/errors" a.go
+a.go:4:2: package "errors" shouldn't be imported, suggested: "github.com/pkg/errors"
 ```
 
 ## Usage
@@ -119,29 +142,6 @@ import (
 func foo() error {
         return errors.New("bar!")
 }
-```
-
-## Example
-
-Assume we have the following file:
-
-```go
-package a
-
-import (
-        "errors"
-)
-
-func foo() error {
-        return errors.New("bar!")
-}
-```
-
-Let's run `faillint` to check if `errors` import is used and report it:
-
-```
-$ faillint -paths "errors=github.com/pkg/errors" a.go
-a.go:4:2: package "errors" shouldn't be imported, suggested: "github.com/pkg/errors"
 ```
 
 ## The need for this tool?
