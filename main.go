@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/fatih/faillint/faillint"
@@ -21,6 +22,8 @@ func main() {
 	ff := flag.NewFlagSet("faillint", flag.ContinueOnError)
 	v := ff.Bool("V", false, "print version and exit")
 	ff.Usage = func() {}
+	ff.SetOutput(io.Discard)
+
 	ff.Parse(os.Args[1:])
 	if *v {
 		fmt.Printf("faillint version %s (%s)\n", version, date)
