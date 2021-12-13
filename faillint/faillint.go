@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,10 +30,6 @@ const (
 )
 
 var (
-	// Analyzer is a global instance of the linter.
-	// DEPRECATED: Use faillint.New instead.
-	Analyzer = NewAnalyzer()
-
 	// pathsRegexp represents a regexp that is used to parse -paths flag.
 	// It parses flag content in set of 3 subgroups:
 	//
@@ -61,6 +58,7 @@ type path struct {
 
 type faillint struct {
 	paths       string // -paths flag
+	exclude     string // -exclude flag
 	ignoretests bool   // -ignore-tests flag
 }
 
@@ -69,6 +67,7 @@ func NewAnalyzer() *analysis.Analyzer {
 	f := faillint{
 		paths:       "",
 		ignoretests: false,
+		exclude:     "",
 	}
 	a := &analysis.Analyzer{
 		Name:             "faillint",
@@ -91,6 +90,7 @@ Fail on the usage of prometheus.DefaultGatherer and prometheus.MustRegister
 Fail on the usage of errors, golang.org/x/net and all sub packages under golang.org/x/net
   --paths errors,golang.org/x/net/...`)
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
+	a.Flags.StringVar(&f.exclude, "exclude", "", "exclude packages from the scan; takes the same format as the -paths flag although exported declarations don't have an effect")
 	return a
 }
 
@@ -108,6 +108,10 @@ func trimAllWhitespaces(str string) string {
 // run is the runner for an analysis pass.
 func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 	if f.paths == "" {
+		return nil, nil
+	}
+
+	if isExcluded(parsePaths(f.exclude), pass.Pkg) {
 		return nil, nil
 	}
 
@@ -174,6 +178,19 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	return nil, nil
+}
+
+// isExcluded returns true if the package should be excluded based on the 'exclude' paths
+func isExcluded(toExclude []path, pkg *types.Package) bool {
+	for _, p := range toExclude {
+		switch {
+		case p.recursive && strings.HasPrefix(pkg.Path(), p.imp):
+			fallthrough
+		case pkg.Path() == p.imp:
+			return true
+		}
+	}
+	return false
 }
 
 // importUsages reports all exported declaration used for a given import.

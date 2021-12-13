@@ -184,9 +184,10 @@ func TestRun(t *testing.T) {
 	testdata := analysistest.TestData()
 
 	for _, tcase := range []struct {
-		name  string
-		dir   string
-		paths string
+		name    string
+		dir     string
+		paths   string
+		exclude string
 
 		ignoreTestFiles bool
 	}{
@@ -313,12 +314,19 @@ func TestRun(t *testing.T) {
 			dir:   "q",
 			paths: "errors",
 		},
+		{
+			name:    "excluding subpackage while still scanning parent package",
+			dir:     "r/...",
+			paths:   "errors,fmt",
+			exclude: "r/subdir/...",
+		},
 	} {
 		t.Run(tcase.name, func(t *testing.T) {
 			f := NewAnalyzer()
-			f.Flags.Set("paths", tcase.paths)
+			_ = f.Flags.Set("paths", tcase.paths)
+			_ = f.Flags.Set("exclude", tcase.exclude)
 			if tcase.ignoreTestFiles {
-				f.Flags.Set("ignore-tests", "true")
+				_ = f.Flags.Set("ignore-tests", "true")
 			}
 
 			// No assertion on result is required as 'analysistest' is for that.
