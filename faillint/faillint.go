@@ -80,16 +80,16 @@ func NewAnalyzer() *analysis.Analyzer {
 	a.Flags.StringVar(&f.paths, "paths", "", `import paths or exported declarations (i.e: functions, constant, types or variables) to fail. E.g.:
 
 Fail on the usage of errors and fmt.Errorf. Also suggest packages for the failures
-  --paths errors=github.com/pkg/errors,fmt.{Errorf}=github.com/pkg/errors.{Errorf}
+  -paths errors=github.com/pkg/errors,fmt.{Errorf}=github.com/pkg/errors.{Errorf}
 
 Fail on the usage of fmt.Println, fmt.Print and fmt.Printf
-  --paths fmt.{Println,Print,Printf}
+  -paths fmt.{Println,Print,Printf}
 
 Fail on the usage of prometheus.DefaultGatherer and prometheus.MustRegister
-  --paths github.com/prometheus/client_golang/prometheus.{DefaultGatherer,MustRegister}
+  -paths github.com/prometheus/client_golang/prometheus.{DefaultGatherer,MustRegister}
 
 Fail on the usage of errors, golang.org/x/net and all sub packages under golang.org/x/net
-  --paths errors,golang.org/x/net/...`)
+  -paths errors,golang.org/x/net/...`)
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
 	return a
 }
