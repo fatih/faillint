@@ -62,6 +62,7 @@ type path struct {
 type faillint struct {
 	paths       string // -paths flag
 	ignoretests bool   // -ignore-tests flag
+	onlytests   bool   // -only-tests flag.
 }
 
 // NewAnalyzer create a faillint analyzer.
@@ -91,6 +92,11 @@ Fail on the usage of prometheus.DefaultGatherer and prometheus.MustRegister
 Fail on the usage of errors, golang.org/x/net and all sub packages under golang.org/x/net
   -paths errors,golang.org/x/net/...`)
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
+	a.Flags.BoolVar(&f.onlytests, "only-tests", false, `only run on functions that begin with Fuzz, Test, or Benchmark. E.g.:
+Fail on the usage of time.Sleep in tests:
+  -paths time.{Sleep} -only-tests=true
+
+Hard-coded sleep durations can lead to flaky tests, it is more useful to wait until some condition is true in a loop`)
 	return a
 }
 
@@ -140,7 +146,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 					continue
 				}
 
-				usages := importUsages(pass, commentMap, file, spec)
+				usages := importUsages(pass, commentMap, file, spec, f.onlytests)
 				if len(usages) == 0 {
 					continue
 				}
@@ -177,7 +183,7 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 }
 
 // importUsages reports all exported declaration used for a given import.
-func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec) map[string][]token.Pos {
+func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, spec *ast.ImportSpec, onlytests bool) map[string][]token.Pos {
 	importRef := spec.Name.String()
 	switch importRef {
 	case "<nil>":
@@ -194,7 +200,12 @@ func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, s
 	}
 	usages := map[string][]token.Pos{}
 
+	var lastFunc *ast.FuncDecl
+
 	ast.Inspect(f, func(n ast.Node) bool {
+		if funcDecl, ok := n.(*ast.FuncDecl); ok {
+			lastFunc = funcDecl
+		}
 		sel, ok := n.(*ast.SelectorExpr)
 		if !ok {
 			return true
@@ -202,6 +213,24 @@ func importUsages(pass *analysis.Pass, commentMap ast.CommentMap, f *ast.File, s
 		if isTopName(sel.X, importRef) {
 			if usageHasDirective(pass, commentMap, n, sel.Sel.NamePos, ignoreKey) {
 				return true
+			}
+
+			if onlytests {
+				if lastFunc == nil {
+					return true
+				}
+				if !strings.HasPrefix(lastFunc.Name.Name, "Test") &&
+					!strings.HasPrefix(lastFunc.Name.Name, "Benchmark") &&
+					!strings.HasPrefix(lastFunc.Name.Name, "Fuzz") {
+					return true
+				}
+
+				start := lastFunc.Pos()
+				end := lastFunc.End()
+
+				if sel.Pos() < start || sel.End() > end {
+					return true
+				}
 			}
 			usages[sel.Sel.Name] = append(usages[sel.Sel.Name], sel.Sel.NamePos)
 		}
