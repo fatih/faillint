@@ -3,6 +3,7 @@
 package faillint
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -62,6 +63,7 @@ type path struct {
 type faillint struct {
 	paths       string // -paths flag
 	ignoretests bool   // -ignore-tests flag
+	onlyTests   bool   // -only-tests flag
 }
 
 // NewAnalyzer create a faillint analyzer.
@@ -69,6 +71,7 @@ func NewAnalyzer() *analysis.Analyzer {
 	f := faillint{
 		paths:       "",
 		ignoretests: false,
+		onlyTests:   false,
 	}
 	a := &analysis.Analyzer{
 		Name:             "faillint",
@@ -90,7 +93,9 @@ Fail on the usage of prometheus.DefaultGatherer and prometheus.MustRegister
 
 Fail on the usage of errors, golang.org/x/net and all sub packages under golang.org/x/net
   -paths errors,golang.org/x/net/...`)
+
 	a.Flags.BoolVar(&f.ignoretests, "ignore-tests", false, "ignore all _test.go files")
+	a.Flags.BoolVar(&f.onlyTests, "only-tests", false, "include only _test.go files")
 	return a
 }
 
@@ -111,6 +116,10 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 		return nil, nil
 	}
 
+	if f.ignoretests && f.onlyTests {
+		return nil, errors.New("--ignore-tests and --only-tests flags cannot be used together")
+	}
+
 	for _, file := range pass.Files {
 		filename := pass.Fset.File(file.Package).Name()
 		isGenerated, err := generated.ParseFile(filename)
@@ -122,9 +131,16 @@ func (f *faillint) run(pass *analysis.Pass) (interface{}, error) {
 			continue
 		}
 
-		if f.ignoretests && strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go") {
+		isTestFile := strings.Contains(pass.Fset.File(file.Package).Name(), "_test.go")
+
+		if f.ignoretests && isTestFile {
 			continue
 		}
+
+		if f.onlyTests && !isTestFile {
+			continue
+		}
+
 		if anyHasDirective(pass, file.Comments, fileIgnoreKey) {
 			continue
 		}

@@ -188,8 +188,21 @@ func TestRun(t *testing.T) {
 		dir   string
 		paths string
 
-		ignoreTestFiles bool
+		ignoreTestFiles   bool
+		onlyTestFunctions bool
 	}{
+		{
+			name:              "sleep in a function which is not a test",
+			dir:               "sleepintest",
+			paths:             "time.{Sleep}",
+			onlyTestFunctions: true,
+		},
+		{
+			name:              "sleep in a function which is a test",
+			dir:               "sleepintest_err",
+			paths:             "time.{Sleep}",
+			onlyTestFunctions: true,
+		},
 		{
 			name:  "unwanted errors package present",
 			dir:   "a",
@@ -319,6 +332,9 @@ func TestRun(t *testing.T) {
 			f.Flags.Set("paths", tcase.paths)
 			if tcase.ignoreTestFiles {
 				f.Flags.Set("ignore-tests", "true")
+			}
+			if tcase.onlyTestFunctions {
+				f.Flags.Set("only-tests", "true")
 			}
 
 			// No assertion on result is required as 'analysistest' is for that.
